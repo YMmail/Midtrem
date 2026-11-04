@@ -141,7 +141,7 @@ LAYOUT = [
     ("rows",     ()), ("blacktable", ()), ("tv", (4.05, BLACK_TABLE_Z)),
     ("jbl",      (4.95, 1.50, 0)),
     ("chair",    (2.37, BLACK_TABLE_Z - 0.58, -1)),
-    ("barstool", (5.85, 8.55, 0)), ("barstool", (5.30, 8.55, -6)),
+    ("barstool", (6.05, 8.55, 0)), ("barstool", (5.30, 8.55, -6)),
     ("stoolstack", ()), ("pac", (W - 0.31, 0.85)), ("cornerrolls", ()),
     ("fan", ()), ("sign", ()), ("shoes", ()),
     ("kat",      (W - 0.75, D - 0.75, 225)),
