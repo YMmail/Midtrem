@@ -91,12 +91,33 @@ class _FB:
         for k in range(4):
             a = k * math.pi / 2 + math.radians(yaw); _cyl(x + .45 * math.cos(a), .12, z + .45 * math.sin(a), .02, .9, (.2, .2, .22))
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_RAW = "https://raw.githubusercontent.com/YMmail/Midtrem/main/"
+_CACHE = os.path.join(_HERE, "_models")
+os.makedirs(_CACHE, exist_ok=True)
+for _p in (_HERE, os.getcwd(), _CACHE):
+    if _p not in sys.path: sys.path.insert(0, _p)
+
+def _fetch(name):
+    """ถ้าไม่มีไฟล์โมเดลในเครื่อง ให้โหลดจาก GitHub มาเก็บใน _models/"""
+    import urllib.request, urllib.parse
+    dst = os.path.join(_CACHE, name + ".py")
+    if not os.path.exists(dst):
+        urllib.request.urlretrieve(_RAW + urllib.parse.quote(name + ".py"), dst)
+    return dst
+
 def _imp(name):
     try:
         return importlib.import_module(name)
-    except Exception:
-        print("[ใช้โมเดลสำรอง]", name)
-        return _FB()
+    except ModuleNotFoundError:
+        try:
+            _fetch(name); importlib.invalidate_caches()
+            return importlib.import_module(name)
+        except Exception as e:
+            print("[ใช้โมเดลสำรอง]", name, "->", e)
+    except Exception as e:
+        print("[import พัง]", name, "->", type(e).__name__, e)
+    return _FB()
 
 office_chair_m = _imp("office_chair")
 aircon_m       = _imp("aircon")
@@ -124,8 +145,8 @@ W, D, H = 305 * INCH, 355 * INCH, 130 * INCH
 EYE_MAX = 1.65                       # ไม่เกิน 165 ซม.
 EYE_HEIGHT, CROUCH_EYE = 1.60, 1.00
 PLAYER_R, WALK, RUN = 0.16, 1.5, 3.2
-START_POS = (0.35, 0.22)             # มุมห้องที่ 1 (มุมตะวันตก-เหนือ)
-START_YAW = math.radians(135)        # หันเฉียงเข้าห้อง
+START_POS = (W / 2, 8.4)             # หน้าประตู เหมือน Final Code
+START_YAW = 0.0                      # หันไปทางหน้าต่าง (-Z)
 CABINET_H = 1.90
 BLACK_TABLE_Z = 1.50
 ROW_GAP = 0.65
@@ -470,7 +491,10 @@ def build_scene():
     glNewList(lst, GL_COMPILE)
     room_shell(); window_wall(); door_wall(); east_wall(); west_wall()
     for code, args in LAYOUT:                    # วนอ่านตารางแล้วแมปลง 3D
-        DISPATCH[code](*args)
+        try:
+            DISPATCH[code](*args)
+        except Exception as e:
+            print('[วาดไม่ได้]', code, '->', type(e).__name__, e)
     cabinet_glass(PANES)
     glEndList()
     SCENE[0] = lst
