@@ -37,8 +37,8 @@ def _load_shell():
         return importlib.import_module("studio_room_shell")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_RAWS = ("https://raw.githubusercontent.com/YMmail/Midtrem/main/",
-         "https://raw.githubusercontent.com/YMmail/Midtrem/add-studio-walk-pyopengl/")
+_RAWS = ("https://raw.githubusercontent.com/YMmail/Midtrem/add-studio-walk-pyopengl/",   # branch นี้ก่อน (เป็นเวอร์ชันล่าสุด ไม่มี pygame)
+         "https://raw.githubusercontent.com/YMmail/Midtrem/main/")
 _CACHE = os.path.join(_HERE, "_models")
 os.makedirs(_CACHE, exist_ok=True)
 for _p in (_HERE, os.getcwd(), _CACHE):
@@ -59,16 +59,22 @@ def _fetch(name):
     return dst
 
 def _imp(name):
-    try:
-        return importlib.import_module(name)
-    except ModuleNotFoundError:
+    """import โมเดล ถ้าไม่มีไฟล์ (หรือไฟล์นั้นต้องใช้ไฟล์อื่นที่ขาด) จะโหลดจาก GitHub มาให้อัตโนมัติ"""
+    want = name
+    for _ in range(8):
         try:
-            _fetch(name); importlib.invalidate_caches()
             return importlib.import_module(name)
+        except ModuleNotFoundError as e:
+            want = e.name or name
+            if want.split(".")[0] in ("OpenGL", "numpy", "PIL"):
+                raise SystemExit("ขาดไลบรารี %s  ->  pip install %s" % (want, "PyOpenGL PyOpenGL_accelerate numpy pillow"))
+            try:
+                _fetch(want); importlib.invalidate_caches()
+            except Exception as e2:
+                raise SystemExit("[import ไม่ได้] %s (ต้องใช้ %s) -> %s\nวางไฟล์ %s.py ไว้โฟลเดอร์เดียวกับไฟล์นี้" % (name, want, e2, want))
         except Exception as e:
-            raise SystemExit("[import ไม่ได้] %s -> %s  (วางไฟล์ %s.py ไว้โฟลเดอร์เดียวกับไฟล์นี้)" % (name, e, name))
-    except Exception as e:
-        raise SystemExit("[import พัง] %s -> %s: %s" % (name, type(e).__name__, e))
+            raise SystemExit("[import พัง] %s -> %s: %s" % (name, type(e).__name__, e))
+    raise SystemExit("[import วนไม่จบ] " + name)
 
 _imp("studio_sign")
 shell_m        = _load_shell()          # แปลนห้อง (ผนัง หน้าต่าง ประตู ทางเดิน) จาก studio_room_shell.py
