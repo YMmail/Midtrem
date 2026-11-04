@@ -143,7 +143,6 @@ items_m        = [_imp(n) for n in ITEM_NAMES]
 fan_m          = _imp("fan")
 sign_m         = _imp("front_sign")
 shoe_m         = _imp("front_shoe_racks")
-jbl_old_m      = _imp("jbl_speaker_New")      # import ไว้เฉยๆ (ตัว _Final ถูกวาดแล้ว กันลำโพงซ้อน)
 # ม้วนกระดาษ (paper_roll*, 12.x, 13) ยังไม่ดึง ตามที่สั่ง
 
 # ============ 2) ขนาดห้อง (เมตร) X=ซ้าย->ขวา Y=สูง Z=หน้าต่าง->ประตู ============
@@ -482,39 +481,95 @@ def d_cabitems():
     for m_ in items_m:
         _place(m_)
 
-# ----- หน้าห้อง (ค่าตำแหน่ง/ขนาดจากภาพที่วัดไว้) -----
+# ----- หน้าห้อง: ทางเดินหน้าประตู (ตัวเลขตำแหน่ง/ขนาดอ่านจากภาพที่วัดไว้) -----
 FRONT_T = 0.12
-FZW = D + FRONT_T
-FRAME_HALF_F = 0.025
+FZW = D + FRONT_T                 # ผิวผนังด้านทางเดิน
 CORR_W = 2.40
+ZW = FZW + CORR_W                 # ผนังหน้าต่างฝั่งตรงข้ามประตู
+FRONT_GROUPS, GROUP_W, PIER_W = 4, 2.55, 0.40
+CORR_X1 = 8.60
+CORR_X0 = CORR_X1 - (1.00 + FRONT_GROUPS * GROUP_W + (FRONT_GROUPS - 1) * PIER_W)
+FRAME_HALF_F, DOOR_TOP = 0.025, 2.60
+SILL_H, WIN_H, PANES_F = 0.83, 1.14, 6
+CLERE_Y0, CLERE_Y1 = SILL_H + WIN_H + 0.62, H - 0.10
+FRAME_DARK, F_WALL, F_STEEL = (0.30, 0.32, 0.35), (0.93, 0.94, 0.92), (0.50, 0.52, 0.55)
+BASE_X0, BASE_L = DOOR_B + FRAME_HALF_F, 3.37
+FRONT_START = (CORR_X1 - 0.40, FZW + 1.00)
+FRONT_YAW = -math.pi / 2
 
 def d_corridor():
-    sk = (0.60, 0.62, 0.66)
-    for xa, xb, ya, yb in wall_pieces(-1.0, W + 1.0, 0, H, DOOR_HOLES):
-        box(xa, ya, FZW - .02, xb, yb, FZW, sk)
-    box(-1.0, -.02, D, W + 1.0, 0, FZW + CORR_W, (.62, .60, .56))
+    fr = (0.90, 0.90, 0.90)
+    # พื้น + เพดาน + ผนังหัวท้าย + ผนังฝั่งตรงข้าม
+    box(CORR_X0, -.02, FZW, CORR_X1, 0, ZW, (0.80, 0.80, 0.81))
+    box(CORR_X0, H, FZW, CORR_X1, H + .02, ZW, (0.90, 0.91, 0.92))
+    box(CORR_X0 - .02, 0, FZW, CORR_X0, H, ZW, F_WALL)
+    box(CORR_X1, 0, FZW, CORR_X1 + .02, H, ZW, (0.80, 0.64, 0.42))
+    box(CORR_X1 - 0.08, 0, FZW, CORR_X1, H, FZW + 0.10, (0.35, 0.17, 0.08))
+    box(CORR_X0, 0, ZW, CORR_X1, H, ZW + .02, F_WALL)
+    # ผนังด้านทางเดินเจาะช่องประตู/ช่องแสง
+    for xa, xb, ya, yb in wall_pieces(CORR_X0, CORR_X1, 0, H, DOOR_HOLES):
+        box(xa, ya, FZW - .02, xb, yb, FZW, F_WALL)
+    # ประตูกระจก (กรอบ)
+    for x in (DOOR_A, DOOR_B):
+        box(x - FRAME_HALF_F, 0, FZW, x + FRAME_HALF_F, DOOR_TOP, FZW + .04, fr)
+    for x in (3.32, W / 2, 4.46):
+        box(x - FRAME_HALF_F, DOOR_OPEN_H, FZW, x + FRAME_HALF_F, DOOR_TOP, FZW + .04, fr)
+    box(DOOR_A, DOOR_OPEN_H, FZW, DOOR_B, DOOR_OPEN_H + .05, FZW + .04, fr)
+    box(DOOR_A, DOOR_TOP - .04, FZW, DOOR_B, DOOR_TOP, FZW + .04, fr)
+    box(DOOR_A, 0, D, DOOR_A + FRAME_HALF_F, DOOR_OPEN_H, FZW, fr)
+    box(DOOR_B - FRAME_HALF_F, 0, D, DOOR_B, DOOR_OPEN_H, FZW, fr)
+    box(DOOR_A, DOOR_OPEN_H - .02, D, DOOR_B, DOOR_OPEN_H, FZW, fr)
+    box(DOOR_A, 0, D, DOOR_B, .015, FZW, (0.55, 0.55, 0.57))
+    # หน้าต่างแถบเหนือผนัง
+    for a_, b_ in STRIP_X:
+        for i in range(3):
+            x = a_ + (b_ - a_) * i / 2
+            box(x - .025, STRIP_Y0 - .02, FZW, x + .025, STRIP_Y1 + .02, FZW + .03, F_STEEL)
+        box(a_, STRIP_Y0 - .02, FZW, b_, STRIP_Y0 + .02, FZW + .03, F_STEEL)
+        box(a_, STRIP_Y1 - .02, FZW, b_, STRIP_Y1 + .02, FZW + .03, F_STEEL)
+    # บัวผนัง
+    box(BASE_X0, 0, FZW, BASE_X0 + BASE_L, 0.12, FZW + 0.02, (0.38, 0.40, 0.42))
+    # หน้าต่างฝั่งตรงข้ามประตู
+    pier = (0.86, 0.87, 0.88)
+    box(CORR_X0, 0, ZW - .03, CORR_X1, 0.12, ZW, (0.15, 0.16, 0.17))
+    for k in range(FRONT_GROUPS):
+        xr = CORR_X1 - 0.50 - k * (GROUP_W + PIER_W); xl = xr - GROUP_W; zg = ZW - .004
+        quad([(xl, SILL_H, zg), (xr, SILL_H, zg), (xr, SILL_H + WIN_H, zg), (xl, SILL_H + WIN_H, zg)], (0.86, 0.91, 0.94))
+        for i in range(PANES_F + 1):
+            x = xl + GROUP_W * i / PANES_F
+            box(x - .02, SILL_H, ZW - .06, x + .02, SILL_H + WIN_H, ZW, FRAME_DARK)
+        box(xl, SILL_H - .03, ZW - .06, xr, SILL_H + .01, ZW, FRAME_DARK)
+        box(xl, SILL_H + WIN_H - .01, ZW - .06, xr, SILL_H + WIN_H + .03, ZW, FRAME_DARK)
+        box(xl - .02, SILL_H - .04, ZW - .16, xr + .02, SILL_H, ZW, pier)
+        quad([(xl, CLERE_Y0, zg), (xr, CLERE_Y0, zg), (xr, CLERE_Y1, zg), (xl, CLERE_Y1, zg)], (0.70, 0.76, 0.80))
+        for i in range(PANES_F + 1):
+            x = xl + GROUP_W * i / PANES_F
+            box(x - .015, CLERE_Y0, ZW - .05, x + .015, CLERE_Y1, ZW, FRAME_DARK)
+        box(xl, CLERE_Y0 - .02, ZW - .05, xr, CLERE_Y0 + .02, ZW, FRAME_DARK)
+        box(xl, CLERE_Y1 - .02, ZW - .05, xr, CLERE_Y1 + .02, ZW, FRAME_DARK)
 
 def d_fan():
     fm = fan_m
     if not hasattr(fm, "exhaust_fan"): return
-    fm.W, fm.D, fm.FZ, fm.FAN_CY = W, D, FZW, 2.31
+    fm.FAN_CY = 2.31                          # ตำแหน่งความสูง (ขนาดใช้ตามโมเดล)
     cx = W / 2 - 0.175
-    fm.exhaust_fan(cx)
-    fm.fan_blades(0.0, cx)
+    glPushMatrix(); glTranslatef(0, 0, FZW)   # โมเดลวาดผนังหนา z -0.12..0 -> ย้ายมาอยู่ในผนังหน้าห้อง
+    fm.exhaust_fan(cx); fm.fan_blades(0.0, cx)
+    glPopMatrix()
 
 def d_sign():
     sm = sign_m
     if not hasattr(sm, "front_sign"): return
-    sm.DOOR_B, sm.FRAME_HALF, sm.SIGN_GAP = DOOR_B, FRAME_HALF_F, 0.15
-    sm.SIGN_W, sm.SIGN_H, sm.SIGN_T, sm.FZ = 0.27, 0.24, 0.004, FZW
+    sm.DOOR_B, sm.FZ = DOOR_B, FZW            # ตำแหน่งวางที่ขอบประตู (ขนาดป้ายใช้ตามโมเดล)
     sm.SIGN_Y1 = STRIP_Y0 - 0.65; sm.SIGN_Y0 = sm.SIGN_Y1 - sm.SIGN_H
     sm.front_sign()
 
 def d_shoes():
     if not hasattr(shoe_m, "front_shoe_racks"): return
-    glPushMatrix(); glTranslatef(DOOR_B + FRAME_HALF_F, 0, FZW)
+    glPushMatrix(); glTranslatef(BASE_X0, 0, FZW)
     shoe_m.front_shoe_racks()
     glPopMatrix()
+    COLL.append((BASE_X0, FZW, BASE_X0 + 2.10, FZW + .15))
 
 DISPATCH = {
     "aircon": draw_aircon, "beam": draw_beam, "lights": draw_lights, "softbox": d_softbox,
@@ -556,7 +611,10 @@ state = {"collide": True, "last": 0, "warp": False}
 
 def blocked(x, z):
     r = PLAYER_R
-    if x < r or x > W - r or z < r or z > D - r:
+    in_room = r <= x <= W - r and r <= z <= D - r
+    in_door = DOOR_A + r <= x <= DOOR_B - r and D - r <= z <= FZW + r
+    in_corr = CORR_X0 + r <= x <= CORR_X1 - r and FZW + r <= z <= ZW - r
+    if not (in_room or in_door or in_corr):
         return True
     if state["collide"]:
         for x0, z0, x1, z1 in COLL:
@@ -606,6 +664,7 @@ def reshape(w, h):
 def key_down(k, x, y):
     if k == b'\x1b': sys.exit(0)
     if k in (b'c', b'C'): state["collide"] = not state["collide"]
+    elif k in (b'f', b'F'): cam.x, cam.z = FRONT_START; cam.yaw, cam.pitch = FRONT_YAW, 0.0
     elif k in (b'r', b'R'): cam.x, cam.z = START_POS; cam.yaw, cam.pitch = START_YAW, 0.0
     else: keys.add(k.lower())
 
