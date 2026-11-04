@@ -91,6 +91,27 @@ class _FB:
         for k in range(4):
             a = k * math.pi / 2 + math.radians(yaw); _cyl(x + .45 * math.cos(a), .12, z + .45 * math.sin(a), .02, .9, (.2, .2, .22))
 
+def _load_shell():
+    """ดึงแปลนห้อง studio_room_shell.py (ไฟล์นั้น import pygame ไว้ -> ใส่ตัวหลอกชั่วคราว ไม่ใช้ pygame จริง)"""
+    import types
+    try:
+        import numpy  # noqa  (ไฟล์ shell ใช้สร้างลายพื้น/ผนัง)
+    except ImportError:
+        sys.exit("ต้องติดตั้ง numpy ก่อน:  pip install numpy")
+    fake = types.ModuleType("pygame"); fake.locals = types.ModuleType("pygame.locals")
+    old = {k: sys.modules.get(k) for k in ("pygame", "pygame.locals")}
+    sys.modules["pygame"], sys.modules["pygame.locals"] = fake, fake.locals
+    try:
+        try:
+            return importlib.import_module("studio_room_shell")
+        except ModuleNotFoundError:
+            _fetch("studio_room_shell"); importlib.invalidate_caches()
+            return importlib.import_module("studio_room_shell")
+    finally:
+        for k, v in old.items():
+            if v is None: sys.modules.pop(k, None)
+            else: sys.modules[k] = v
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _RAW = "https://raw.githubusercontent.com/YMmail/Midtrem/main/"
 _CACHE = os.path.join(_HERE, "_models")
@@ -119,6 +140,7 @@ def _imp(name):
         print("[import พัง]", name, "->", type(e).__name__, e)
     return _FB()
 
+shell_m        = _load_shell()          # แปลนห้อง (ผนัง หน้าต่าง ประตู ทางเดิน) จาก studio_room_shell.py
 office_chair_m = _imp("office_chair")
 aircon_m       = _imp("aircon")
 stool_m        = _imp("stool")
@@ -158,9 +180,11 @@ BLACK_TABLE_Z = 1.50
 ROW_GAP = 0.65
 BEAM_HANG = 0.60
 DESK_SHIFT = (-0.125, 0.05)
-DOOR_A, DOOR_B, DOOR_OPEN_H = 2.82, 4.93, 2.00   # กว้าง 2.11 ม. สูง 2.00 ม. (จาก Studio.pdf)
-STRIP_X = ((0.48, 2.78), (5.22, 7.52))
-STRIP_Y0, STRIP_Y1 = 2.10, 2.58
+W, D, H = shell_m.W, shell_m.D, shell_m.H
+DOOR_A, DOOR_B, DOOR_OPEN_H = shell_m.DOOR_A, shell_m.DOOR_B, shell_m.DOOR_OPEN_H
+STRIP_X, STRIP_Y0, STRIP_Y1 = shell_m.STRIP_X, shell_m.STRIP_Y0, shell_m.STRIP_Y1
+FZW, BASE_X0 = shell_m.FZ, shell_m.BASE_X0
+FRONT_START, FRONT_YAW = shell_m.FRONT_START, shell_m.FRONT_YAW
 
 WALL_GREY, BLACK = (0.53, 0.55, 0.60), (0.04, 0.04, 0.05)
 WOOD, WHITE, CURTAIN, STEEL = (0.86, 0.72, 0.52), (0.92, 0.92, 0.92), (0.27, 0.29, 0.35), (0.78, 0.80, 0.82)
@@ -170,10 +194,9 @@ COLL = []                            # กล่องชน (x0,z0,x1,z1)
 # (รหัส, พารามิเตอร์)  รหัสแปลงเป็นฟังก์ชันวาดใน DISPATCH
 LAYOUT = [
     ("aircon",   (1.75,)), ("aircon", (6.00,)),
-    ("beam",     ()), ("lights", ()),
     ("softbox",  (4.35, 0.55, 8)), ("softbox", (6.65, 0.95, -25)),
     ("dome",     (3.25, 0.62)), ("dome", (5.65, 0.95)),
-    ("corridor", ()), ("cabinet",  ()), ("cabitems", ()), ("cstands", ()),
+    ("cabinet",  ()), ("cabitems", ()), ("cstands", ()),
     ("rows",     ()), ("blacktable", ()), ("tv", (4.05, BLACK_TABLE_Z)),
     ("jbl",      (4.95, 1.50, 0)),
     ("chair",    (2.37, BLACK_TABLE_Z - 0.58, -1)),
@@ -231,80 +254,6 @@ DOOR_HOLES = [(DOOR_A, DOOR_B, 0.0, DOOR_OPEN_H), (DOOR_A, DOOR_B, DOOR_OPEN_H +
              + [(a, b, STRIP_Y0, STRIP_Y1) for a, b in STRIP_X]
 
 # ============ 5) โครงห้อง ============
-def checker_floor():
-    n = 0.15
-    glBegin(GL_QUADS)
-    for i in range(int(W / 1.2) + 1):
-        for j in range(int(D / 1.2) + 1):
-            s = 0.80 if (i + j) % 2 == 0 else 0.74
-            glColor3f(0.80 * s, 0.74 * s, 0.66 * s)
-            x0, z0 = i * 1.2, j * 1.2
-            x1, z1 = min(x0 + 1.2, W), min(z0 + 1.2, D)
-            if x1 > x0 and z1 > z0:
-                for p in ((x0, 0, z0), (x1, 0, z0), (x1, 0, z1), (x0, 0, z1)):
-                    glVertex3f(*p)
-    glEnd()
-
-def room_shell():
-    checker_floor()
-    quad([(0, H, 0), (W, H, 0), (W, H, D), (0, H, D)], (0.12, 0.12, 0.13))
-    quad([(0, 0, 0), (W, 0, 0), (W, H, 0), (0, H, 0)], tuple(v * .95 for v in WALL_GREY))
-    for xa, xb, ya, yb in wall_pieces(0, W, 0, H, DOOR_HOLES):
-        quad([(xa, ya, D), (xb, ya, D), (xb, yb, D), (xa, yb, D)], WALL_GREY)
-    quad([(0, 0, 0), (0, 0, D), (0, H, D), (0, H, 0)], tuple(v * .85 for v in WALL_GREY))
-    quad([(W, 0, 0), (W, 0, D), (W, H, D), (W, H, 0)], tuple(v * .90 for v in WALL_GREY))
-    sk = (0.42, 0.44, 0.48)
-    box(0, 0, 0, W, 0.09, 0.02, sk); box(0, 0, D - 0.02, DOOR_A, 0.09, D, sk)
-    box(DOOR_B, 0, D - 0.02, W, 0.09, D, sk)
-    box(0, 0, 0, 0.02, 0.09, D, sk); box(W - 0.02, 0, 0, W, 0.09, D, sk)
-
-def window_wall():
-    sill, top = 0.78, 0.78 + 1.93
-    fr = (0.30, 0.32, 0.35)
-    for a, b in [(0.255, 0.255 + 3.42), (W - 0.255 - 3.42, W - 0.255)]:
-        glBegin(GL_QUADS)
-        glColor3f(.58, .64, .60); glVertex3f(a, sill, .012); glVertex3f(b, sill, .012)
-        glColor3f(.80, .85, .90); glVertex3f(b, 1.55, .012); glVertex3f(a, 1.55, .012)
-        glEnd()
-        quad([(a, 1.55, .012), (b, 1.55, .012), (b, top, .012), (a, top, .012)], (.40, .41, .44))
-        for i in range(7):
-            x = a + (b - a) * i / 6
-            box(x - .02, sill, 0, x + .02, top, .06, fr)
-        box(a, top, 0, b, top + .04, .06, fr)
-        box(a - .02, sill - .04, 0, b + .02, sill, .16, (.86, .87, .88))
-    pier = (.49, .51, .55)
-    box(W / 2 - .2, 0, 0, W / 2 + .2, H, .10, pier, True)
-    box(0, 0, 0, .255, H, .10, pier); box(W - .255, 0, 0, W, H, .10, pier)
-
-def door_wall():
-    z, fr, fc = D - 0.02, (.90, .90, .90), (.28, .30, .33)
-    for a, b in STRIP_X:
-        for i in range(3):
-            x = a + (b - a) * i / 2
-            box(x - .025, 2.08, z - .03, x + .025, 2.60, D, fc)
-        box(a, 2.08, z - .03, b, 2.12, D, fc); box(a, 2.56, z - .03, b, 2.60, D, fc)
-    for x in (DOOR_A, DOOR_B):
-        box(x - .025, 0, z - .04, x + .025, 2.60, D, fr)
-    for x in (3.32, W / 2, 4.46):
-        box(x - .025, DOOR_OPEN_H, z - .04, x + .025, 2.60, D, fr)
-    box(DOOR_A, DOOR_OPEN_H, z - .04, DOOR_B, DOOR_OPEN_H + .05, D, fr)
-    box(DOOR_A, 2.56, z - .04, DOOR_B, 2.60, D, fr)
-    box(2.20, 2.0, z - .08, 5.58, 2.03, z - .05, STEEL)
-    for a, b in ((2.23, DOOR_A - .03), (DOOR_B + .03, 5.55)):
-        for i in range(6):
-            x0, x1 = a + (b - a) * i / 6, a + (b - a) * (i + 1) / 6
-            s, d = (1.0, .10) if i % 2 == 0 else (.82, .07)
-            box(x0, .03, z - d, x1, 2.0, z - .04, tuple(v * s for v in CURTAIN))
-    COLL.append((0, D - .05, DOOR_A, D)); COLL.append((DOOR_B, D - .05, W, D))
-
-def east_wall():
-    for i in range(60):
-        z0, z1 = D * i / 60, D * (i + 1) / 60
-        s, d = (1.0, .14) if i % 2 == 0 else (.80, .09)
-        box(W - d, .03, z0, W - .02, 2.36, z1, tuple(v * s for v in CURTAIN))
-    box(W - .12, 2.36, 0, W - .02, 2.52, D, (.30, .32, .35))
-    box(W - .05, 2.34, 0, W - .02, 2.36, D, STEEL)
-
 def west_wall():
     z0, z1 = 2.3, 7.1; zm = (z0 + z1) / 2
     y0 = 1.05; y1 = y0 + 47.5 * INCH; yt = y1 + .10
@@ -320,21 +269,6 @@ def west_wall():
     box(0, yt, 6.62, .06, yt + .045, 6.95, (.55, .40, .25))
     for z in (z0 + .45, z0 + 1.55, zm, z1 - 1.55, z1 - .45):
         box(0, y0 - .14, z - .02, .05, y0 - .06, z + .02, (.12, .07, .05))
-
-def draw_beam():
-    bw = .37
-    box(W / 2 - bw / 2, H - BEAM_HANG, 0, W / 2 + bw / 2, H, D, (.07, .07, .08))
-
-def draw_lights():
-    for x in (1.9, 5.85):
-        for k in range(5):
-            z = 1.0 + k * 1.75
-            box(x - .10, H - .07, z - .6, x + .10, H, z + .6, (.95, .97, 1.0))
-    for x in (3.0, 4.75):
-        for k in range(4):
-            cz = 1.6 + k * 1.9
-            glColor3f(.05, .05, .05)
-            box(x - .04, H - .16, cz - .04, x + .04, H, cz + .04, (.05, .05, .05))
 
 def draw_aircon(cx):
     aircon_m.aircon(cx, 0.55, H - 0.40)
@@ -481,73 +415,6 @@ def d_cabitems():
     for m_ in items_m:
         _place(m_)
 
-# ----- หน้าห้อง: ทางเดินหน้าประตู (ตัวเลขตำแหน่ง/ขนาดอ่านจากภาพที่วัดไว้) -----
-FRONT_T = 0.12
-FZW = D + FRONT_T                 # ผิวผนังด้านทางเดิน
-CORR_W = 2.40
-ZW = FZW + CORR_W                 # ผนังหน้าต่างฝั่งตรงข้ามประตู
-FRONT_GROUPS, GROUP_W, PIER_W = 4, 2.55, 0.40
-CORR_X1 = 8.60
-CORR_X0 = CORR_X1 - (1.00 + FRONT_GROUPS * GROUP_W + (FRONT_GROUPS - 1) * PIER_W)
-FRAME_HALF_F, DOOR_TOP = 0.025, 2.60
-SILL_H, WIN_H, PANES_F = 0.83, 1.14, 6
-CLERE_Y0, CLERE_Y1 = SILL_H + WIN_H + 0.62, H - 0.10
-FRAME_DARK, F_WALL, F_STEEL = (0.30, 0.32, 0.35), (0.93, 0.94, 0.92), (0.50, 0.52, 0.55)
-BASE_X0, BASE_L = DOOR_B + FRAME_HALF_F, 3.37
-FRONT_START = (CORR_X1 - 0.40, FZW + 1.00)
-FRONT_YAW = -math.pi / 2
-
-def d_corridor():
-    fr = (0.90, 0.90, 0.90)
-    # พื้น + เพดาน + ผนังหัวท้าย + ผนังฝั่งตรงข้าม
-    box(CORR_X0, -.02, FZW, CORR_X1, 0, ZW, (0.80, 0.80, 0.81))
-    box(CORR_X0, H, FZW, CORR_X1, H + .02, ZW, (0.90, 0.91, 0.92))
-    box(CORR_X0 - .02, 0, FZW, CORR_X0, H, ZW, F_WALL)
-    box(CORR_X1, 0, FZW, CORR_X1 + .02, H, ZW, (0.80, 0.64, 0.42))
-    box(CORR_X1 - 0.08, 0, FZW, CORR_X1, H, FZW + 0.10, (0.35, 0.17, 0.08))
-    box(CORR_X0, 0, ZW, CORR_X1, H, ZW + .02, F_WALL)
-    # ผนังด้านทางเดินเจาะช่องประตู/ช่องแสง
-    for xa, xb, ya, yb in wall_pieces(CORR_X0, CORR_X1, 0, H, DOOR_HOLES):
-        box(xa, ya, FZW - .02, xb, yb, FZW, F_WALL)
-    # ประตูกระจก (กรอบ)
-    for x in (DOOR_A, DOOR_B):
-        box(x - FRAME_HALF_F, 0, FZW, x + FRAME_HALF_F, DOOR_TOP, FZW + .04, fr)
-    for x in (3.32, W / 2, 4.46):
-        box(x - FRAME_HALF_F, DOOR_OPEN_H, FZW, x + FRAME_HALF_F, DOOR_TOP, FZW + .04, fr)
-    box(DOOR_A, DOOR_OPEN_H, FZW, DOOR_B, DOOR_OPEN_H + .05, FZW + .04, fr)
-    box(DOOR_A, DOOR_TOP - .04, FZW, DOOR_B, DOOR_TOP, FZW + .04, fr)
-    box(DOOR_A, 0, D, DOOR_A + FRAME_HALF_F, DOOR_OPEN_H, FZW, fr)
-    box(DOOR_B - FRAME_HALF_F, 0, D, DOOR_B, DOOR_OPEN_H, FZW, fr)
-    box(DOOR_A, DOOR_OPEN_H - .02, D, DOOR_B, DOOR_OPEN_H, FZW, fr)
-    box(DOOR_A, 0, D, DOOR_B, .015, FZW, (0.55, 0.55, 0.57))
-    # หน้าต่างแถบเหนือผนัง
-    for a_, b_ in STRIP_X:
-        for i in range(3):
-            x = a_ + (b_ - a_) * i / 2
-            box(x - .025, STRIP_Y0 - .02, FZW, x + .025, STRIP_Y1 + .02, FZW + .03, F_STEEL)
-        box(a_, STRIP_Y0 - .02, FZW, b_, STRIP_Y0 + .02, FZW + .03, F_STEEL)
-        box(a_, STRIP_Y1 - .02, FZW, b_, STRIP_Y1 + .02, FZW + .03, F_STEEL)
-    # บัวผนัง
-    box(BASE_X0, 0, FZW, BASE_X0 + BASE_L, 0.12, FZW + 0.02, (0.38, 0.40, 0.42))
-    # หน้าต่างฝั่งตรงข้ามประตู
-    pier = (0.86, 0.87, 0.88)
-    box(CORR_X0, 0, ZW - .03, CORR_X1, 0.12, ZW, (0.15, 0.16, 0.17))
-    for k in range(FRONT_GROUPS):
-        xr = CORR_X1 - 0.50 - k * (GROUP_W + PIER_W); xl = xr - GROUP_W; zg = ZW - .004
-        quad([(xl, SILL_H, zg), (xr, SILL_H, zg), (xr, SILL_H + WIN_H, zg), (xl, SILL_H + WIN_H, zg)], (0.86, 0.91, 0.94))
-        for i in range(PANES_F + 1):
-            x = xl + GROUP_W * i / PANES_F
-            box(x - .02, SILL_H, ZW - .06, x + .02, SILL_H + WIN_H, ZW, FRAME_DARK)
-        box(xl, SILL_H - .03, ZW - .06, xr, SILL_H + .01, ZW, FRAME_DARK)
-        box(xl, SILL_H + WIN_H - .01, ZW - .06, xr, SILL_H + WIN_H + .03, ZW, FRAME_DARK)
-        box(xl - .02, SILL_H - .04, ZW - .16, xr + .02, SILL_H, ZW, pier)
-        quad([(xl, CLERE_Y0, zg), (xr, CLERE_Y0, zg), (xr, CLERE_Y1, zg), (xl, CLERE_Y1, zg)], (0.70, 0.76, 0.80))
-        for i in range(PANES_F + 1):
-            x = xl + GROUP_W * i / PANES_F
-            box(x - .015, CLERE_Y0, ZW - .05, x + .015, CLERE_Y1, ZW, FRAME_DARK)
-        box(xl, CLERE_Y0 - .02, ZW - .05, xr, CLERE_Y0 + .02, ZW, FRAME_DARK)
-        box(xl, CLERE_Y1 - .02, ZW - .05, xr, CLERE_Y1 + .02, ZW, FRAME_DARK)
-
 def d_fan():
     fm = fan_m
     if not hasattr(fm, "exhaust_fan"): return
@@ -572,8 +439,8 @@ def d_shoes():
     COLL.append((BASE_X0, FZW, BASE_X0 + 2.10, FZW + .15))
 
 DISPATCH = {
-    "aircon": draw_aircon, "beam": draw_beam, "lights": draw_lights, "softbox": d_softbox,
-    "dome": d_dome, "cabinet": d_cabinet, "cabitems": d_cabitems, "corridor": d_corridor, "fan": d_fan, "sign": d_sign, "shoes": d_shoes, "cstands": d_cstands,
+    "aircon": draw_aircon, "softbox": d_softbox,
+    "dome": d_dome, "cabinet": d_cabinet, "cabitems": d_cabitems, "fan": d_fan, "sign": d_sign, "shoes": d_shoes, "cstands": d_cstands,
     "rows": d_rows, "blacktable": d_blacktable, "tv": d_tv, "jbl": d_jbl, "chair": d_chair,
     "barstool": d_barstool, "stoolstack": d_stoolstack, "pac": d_pac,
     "kat": d_kat,
@@ -582,7 +449,10 @@ DISPATCH = {
 SCENE = [0]
 
 def build_scene():
-    COLL.clear()
+    S = shell_m
+    COLL.clear(); S.COLLIDERS.clear(); S.GLASS_QUADS.clear()
+    tex = (S.upload_texture(S.tex_floor()), S.upload_texture(S.tex_wall()), S.upload_texture(S.tex_ceiling()))
+    ter, fwall = S.upload_texture(S.tex_terrazzo()), S.upload_texture(S.tex_front_wall())
     try:
         if hasattr(sign_m, "generate_sign_texture"):
             sign_m.SIGN_TEX[0] = sign_m.generate_sign_texture()
@@ -590,12 +460,16 @@ def build_scene():
         print('[ป้าย] สร้างเท็กซ์เจอร์ไม่ได้:', e)
     lst = glGenLists(1)
     glNewList(lst, GL_COMPILE)
-    room_shell(); window_wall(); door_wall(); east_wall(); west_wall()
+    S.room_shell(tex); S.ceiling_fixtures(); S.window_wall(); S.door_wall(); S.east_wall()   # แปลนห้อง
+    S.front_shell(ter, fwall); S.front_door(); S.front_strip_windows(); S.wall_glass()       # ทางเดินหน้าห้อง
+    S.front_baseboard(); S.front_window_wall()
+    west_wall()
     for code, args in LAYOUT:                    # วนอ่านตารางแล้วแมปลง 3D
         try:
             DISPATCH[code](*args)
         except Exception as e:
             print('[วาดไม่ได้]', code, '->', type(e).__name__, e)
+    S.draw_window_glass()
     glEndList()
     SCENE[0] = lst
 
@@ -611,24 +485,24 @@ state = {"collide": True, "last": 0, "warp": False}
 
 def blocked(x, z):
     r = PLAYER_R
-    in_room = r <= x <= W - r and r <= z <= D - r
-    in_door = DOOR_A + r <= x <= DOOR_B - r and D - r <= z <= FZW + r
-    in_corr = CORR_X0 + r <= x <= CORR_X1 - r and FZW + r <= z <= ZW - r
-    if not (in_room or in_door or in_corr):
-        return True
     if state["collide"]:
+        if shell_m.blocked(x, z): return True      # ผนัง ประตูบานสวิง ทางเดิน
         for x0, z0, x1, z1 in COLL:
             if x0 - r < x < x1 + r and z0 - r < z < z1 + r:
                 return True
-    return False
+        return False
+    in_room = r <= x <= W - r and r <= z <= D - r
+    in_door = DOOR_A + r <= x <= DOOR_B - r and D - r <= z <= FZW + r
+    in_corr = shell_m.CORR_X0 + r <= x <= shell_m.CORR_X1 - r and FZW + r <= z <= shell_m.ZW - r
+    return not (in_room or in_door or in_corr)
 
 def move(dx, dz):
-    if blocked(cam.x, cam.z):          # ติดอยู่ -> ให้ขยับออกได้
-        cam.x += dx; cam.z += dz
-        cam.x = min(max(cam.x, PLAYER_R), W - PLAYER_R); cam.z = min(max(cam.z, PLAYER_R), D - PLAYER_R)
-        return
-    if not blocked(cam.x + dx, cam.z): cam.x += dx
-    if not blocked(cam.x, cam.z + dz): cam.z += dz
+    dc = shell_m.door_clearance
+    stuck = dc(cam.x, cam.z) < 0
+    nx = cam.x + dx
+    if not blocked(nx, cam.z) or (stuck and dc(nx, cam.z) >= dc(cam.x, cam.z)): cam.x = nx
+    nz = cam.z + dz
+    if not blocked(cam.x, nz) or (stuck and dc(cam.x, nz) >= dc(cam.x, cam.z)): cam.z = nz
 
 def update():
     now = glutGet(GLUT_ELAPSED_TIME)
@@ -645,6 +519,7 @@ def update():
         sp = RUN if 'shift' in keys else WALK
         move(vx / n * sp * dt, vz / n * sp * dt)
     cam.y = min(EYE_MAX, cam.y)
+    shell_m.update_door(cam, dt)              # ประตูกระจกเปิดเอง
     glutPostRedisplay()
 
 def display():
@@ -655,6 +530,7 @@ def display():
     gluLookAt(cam.x, cam.y, cam.z, cam.x + math.sin(cam.yaw) * cp, cam.y + math.sin(cam.pitch),
               cam.z - math.cos(cam.yaw) * cp, 0, 1, 0)
     glCallList(SCENE[0])
+    shell_m.draw_auto_door()
     glutSwapBuffers()
 
 def reshape(w, h):
