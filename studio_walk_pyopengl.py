@@ -415,14 +415,42 @@ def d_cabitems():
     for m_ in items_m:
         _place(m_)
 
+FAN_CX, FAN_CY, FAN_HALF = W / 2 - 0.175, 2.31, 0.15       # ตำแหน่งพัดลมในช่องแสงเหนือประตู
+
+def cut_fan_hole(S):
+    """เจาะกระจกช่องแสงให้พัดลมทะลุ (ตัดกระจกทั้งสองฝั่งผนังตรงตำแหน่งพัดลมออก)"""
+    out = []
+    for q in S.GLASS_QUADS:
+        zs = {round(pt[2], 4) for pt in q}
+        if len(zs) == 1 and zs.pop() in (round(S.D, 4), round(S.FZ, 4)):
+            xs, ys, z = [pt[0] for pt in q], [pt[1] for pt in q], q[0][2]
+            x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+            cx, cy, h = FAN_CX, FAN_CY, FAN_HALF
+            if x0 <= cx - h and x1 >= cx + h and y0 <= cy - h and y1 >= cy + h:
+                for (a, b, c, d) in ((x0, cx - h, y0, y1), (cx + h, x1, y0, y1),
+                                     (cx - h, cx + h, y0, cy - h), (cx - h, cx + h, cy + h, y1)):
+                    out.append([(a, c, z), (b, c, z), (b, d, z), (a, d, z)])
+                continue
+        out.append(q)
+    S.GLASS_QUADS[:] = out
+
 def d_fan():
     fm = fan_m
     if not hasattr(fm, "exhaust_fan"): return
-    fm.FAN_CY = 2.31                          # ตำแหน่งความสูง (ขนาดใช้ตามโมเดล)
-    cx = W / 2 - 0.175
-    glPushMatrix(); glTranslatef(0, 0, FZW)   # โมเดลวาดผนังหนา z -0.12..0 -> ย้ายมาอยู่ในผนังหน้าห้อง
-    fm.exhaust_fan(cx); fm.fan_blades(0.0, cx)
-    glPopMatrix()
+    fm.FAN_CY = FAN_CY
+    cx = FAN_CX
+    keep = fm.cable
+    fm.cable = lambda *a, **k: None            # ตัวสายไฟของโมเดลอยู่ในกรอบพิกัดเก่า -> วาดเองด้านล่างให้ติดผนังฝั่งห้อง
+    glPushMatrix(); glTranslatef(0, 0, FZW)    # โมเดลวาดผนังหนา z -0.12..0 -> ย้ายมาอยู่ในผนังหน้าห้อง
+    try:
+        fm.exhaust_fan(cx); fm.fan_blades(0.0, cx)
+    finally:
+        glPopMatrix(); fm.cable = keep
+    # สายไฟ: เกาะกำแพงด้านในห้อง (ค่าเดียวกับโมเดล แต่ z อิง D = ผนังห้อง)
+    sg = 1.0 if cx < W / 2 else -1.0
+    xc, zf = W / 2 - sg * 0.010, D - 0.067
+    keep([(cx + sg * 0.11, FAN_CY + 0.13, D - 0.012), (xc, FAN_CY + 0.13, zf), (xc, 2.605, zf),
+          (xc, 2.64, D - 0.018), (xc, 2.65, D - 0.015)], r=0.004, col=(0.05, 0.05, 0.06), seg=6)
 
 def d_sign():
     sm = sign_m
@@ -463,6 +491,7 @@ def build_scene():
     S.room_shell(tex); S.ceiling_fixtures(); S.window_wall(); S.door_wall(); S.east_wall()   # แปลนห้อง
     S.front_shell(ter, fwall); S.front_door(); S.front_strip_windows(); S.wall_glass()       # ทางเดินหน้าห้อง
     S.front_baseboard(); S.front_window_wall()
+    cut_fan_hole(S)                                                                           # เจาะกระจกให้พัดลม
     west_wall()
     for code, args in LAYOUT:                    # วนอ่านตารางแล้วแมปลง 3D
         try:
