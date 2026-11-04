@@ -4,7 +4,7 @@
 ขนาดห้อง/ตำแหน่งของทุกชิ้นอ่านมาจาก Final Code 209_219_258_260_270 (ไม่ได้ import ไฟล์นั้น)
 ชิ้นงานดึงจากไฟล์ย่อยเดิมด้วย import
 W A S D เดิน | เมาส์หันมอง | Shift วิ่ง | C เปิด/ปิดชน | R รีเซ็ต | Esc ออก"""
-import math, os, sys, random, importlib
+import math, os, sys, random, importlib, re, inspect
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -128,8 +128,6 @@ keyboard_m     = _imp("keyboard")
 mouse_m        = _imp("magic_mouse")
 imac_m         = _imp("IMAC_FInal")
 pac_m          = _imp("Portable_New")
-proll_m        = _imp("paper_roll")
-proll_un_m     = _imp("paper_roll_unrolled")
 softbox_m      = _imp("softbox_rect_New")
 dome_m         = _imp("dome_para_New")
 tv_m           = _imp("tv_stand")
@@ -138,6 +136,15 @@ btable_m       = _imp("black_table")
 jbl_m          = _imp("jbl_speaker_New_Final")
 cstand_m       = _imp("11_C_Stand")
 kat_m          = _imp("14_KAT_VR_PyOpenGL_only")
+cab_m          = _imp("01_cabinet_Ninew")
+ITEM_NAMES     = ("02_yellow_box", "03_blue_box", "04_white_box", "05_documents", "06_cardboard_box",
+                  "07_black_bag", "08_orange_cloth_Box", "09_green_cloth_Box", "10_paper_on_shelf")
+items_m        = [_imp(n) for n in ITEM_NAMES]
+fan_m          = _imp("fan")
+sign_m         = _imp("front_sign")
+shoe_m         = _imp("front_shoe_racks")
+jbl_old_m      = _imp("jbl_speaker_New")      # import ไว้เฉยๆ (ตัว _Final ถูกวาดแล้ว กันลำโพงซ้อน)
+# ม้วนกระดาษ (paper_roll*, 12.x, 13) ยังไม่ดึง ตามที่สั่ง
 
 # ============ 2) ขนาดห้อง (เมตร) X=ซ้าย->ขวา Y=สูง Z=หน้าต่าง->ประตู ============
 INCH = 0.0254
@@ -167,12 +174,13 @@ LAYOUT = [
     ("beam",     ()), ("lights", ()),
     ("softbox",  (4.35, 0.55, 8)), ("softbox", (6.65, 0.95, -25)),
     ("dome",     (3.25, 0.62)), ("dome", (5.65, 0.95)),
-    ("cabinet",  ()), ("cstands", ()), ("wallrolls", ()),
+    ("corridor", ()), ("cabinet",  ()), ("cabitems", ()), ("cstands", ()),
     ("rows",     ()), ("blacktable", ()), ("tv", (4.05, BLACK_TABLE_Z)),
     ("jbl",      (4.95, 1.50, 0)),
     ("chair",    (2.37, BLACK_TABLE_Z - 0.58, -1)),
     ("barstool", (5.85, 8.55, 0)), ("barstool", (5.30, 8.55, -6)),
-    ("stoolstack", ()), ("pac", (W - 0.31, 0.85)), ("cornerrolls", ()),
+    ("stoolstack", ()), ("pac", (W - 0.31, 0.85)),
+    ("fan", ()), ("sign", ()), ("shoes", ()),
     ("kat",      (W - 0.75, D - 0.75, 225)),
 ]
 
@@ -376,24 +384,6 @@ def cabinet_glass(panes):
 # ============ 7) ตัวแปลงรหัส -> ฟังก์ชันวาด ============
 PANES = []
 
-def roll_wall(zc, xo, cy, r, L, col):
-    glPushMatrix(); glTranslatef(0, 0, zc); glRotatef(90, 0, 1, 0)
-    proll_m.paper_roll(-L / 2, L / 2, cy, xo, r, col)
-    glPopMatrix()
-
-def d_wallrolls():
-    COLL.append((0.0, 2.78, 0.36, 5.86)); L = 1.36
-    roll_wall(5.10, .085, .070, .070, L, (.25, .60, .30)); roll_wall(5.05, .225, .065, .065, L, (.95, .95, .94))
-    roll_wall(3.55, .085, .070, .070, L, (.95, .55, .65)); roll_wall(3.55, .225, .065, .065, L, (.74, .57, .36))
-    roll_wall(3.60, .155, .180, .060, L, (.93, .93, .92))
-
-def d_cornerrolls():
-    COLL.append((5.64, 0.0, 7.16, 0.40))
-    u = proll_un_m.paper_roll_unrolled
-    u(5.70, 7.06, .070, .085, .070, (.95, .95, .94), 0.0)
-    u(5.70, 7.06, .065, .225, .065, (.95, .55, .65), 0.40)
-    u(5.74, 7.10, .180, .155, .060, (.74, .57, .36), 0.0)
-
 def ph(m, x0, z0, x1, z1, h, c=(.75, .45, .25)):
     pass
 
@@ -472,21 +462,77 @@ def d_pac(x, z):
 def d_kat(x, z, yaw):
     kat_m.kat_vr(kat_m.LOGO_TEX, x, z, yaw); ph(kat_m, x - .6, z - .6, x + .6, z + .6, 2.2, (.1, .1, .15)); COLL.append((x - .6, z - .6, x + .6, z + .6))
 
+_TR = re.compile(r"glTranslatef\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)")
+
+def _place(mod):
+    """ไฟล์ 01-10 วาดแบบมีออฟเซ็ตสำหรับหน้าต่างดูโมเดล -> หักออกให้ได้พิกัดโลกจริง"""
+    if not hasattr(mod, "draw_object"):
+        return
+    t = _TR.search(inspect.getsource(mod.draw_object))
+    glPushMatrix()
+    if t: glTranslatef(-float(t.group(1)), -float(t.group(2)), -float(t.group(3)))
+    mod.draw_object()
+    glPopMatrix()
+
 def d_cabinet():
-    PANES[:] = draw_cabinet()
+    _place(cab_m)
+    COLL.append((.02, .50, .48, 1.98))
+
+def d_cabitems():
+    for m_ in items_m:
+        _place(m_)
+
+# ----- หน้าห้อง (ค่าตำแหน่ง/ขนาดจากภาพที่วัดไว้) -----
+FRONT_T = 0.12
+FZW = D + FRONT_T
+FRAME_HALF_F = 0.025
+CORR_W = 2.40
+
+def d_corridor():
+    sk = (0.60, 0.62, 0.66)
+    for xa, xb, ya, yb in wall_pieces(-1.0, W + 1.0, 0, H, DOOR_HOLES):
+        box(xa, ya, FZW - .02, xb, yb, FZW, sk)
+    box(-1.0, -.02, D, W + 1.0, 0, FZW + CORR_W, (.62, .60, .56))
+
+def d_fan():
+    fm = fan_m
+    if not hasattr(fm, "exhaust_fan"): return
+    fm.W, fm.D, fm.FZ, fm.FAN_CY = W, D, FZW, 2.31
+    cx = W / 2 - 0.175
+    fm.exhaust_fan(cx)
+    fm.fan_blades(0.0, cx)
+
+def d_sign():
+    sm = sign_m
+    if not hasattr(sm, "front_sign"): return
+    sm.DOOR_B, sm.FRAME_HALF, sm.SIGN_GAP = DOOR_B, FRAME_HALF_F, 0.15
+    sm.SIGN_W, sm.SIGN_H, sm.SIGN_T, sm.FZ = 0.27, 0.24, 0.004, FZW
+    sm.SIGN_Y1 = STRIP_Y0 - 0.65; sm.SIGN_Y0 = sm.SIGN_Y1 - sm.SIGN_H
+    sm.front_sign()
+
+def d_shoes():
+    if not hasattr(shoe_m, "front_shoe_racks"): return
+    glPushMatrix(); glTranslatef(DOOR_B + FRAME_HALF_F, 0, FZW)
+    shoe_m.front_shoe_racks()
+    glPopMatrix()
 
 DISPATCH = {
     "aircon": draw_aircon, "beam": draw_beam, "lights": draw_lights, "softbox": d_softbox,
-    "dome": d_dome, "cabinet": d_cabinet, "cstands": d_cstands, "wallrolls": d_wallrolls,
+    "dome": d_dome, "cabinet": d_cabinet, "cabitems": d_cabitems, "corridor": d_corridor, "fan": d_fan, "sign": d_sign, "shoes": d_shoes, "cstands": d_cstands,
     "rows": d_rows, "blacktable": d_blacktable, "tv": d_tv, "jbl": d_jbl, "chair": d_chair,
     "barstool": d_barstool, "stoolstack": d_stoolstack, "pac": d_pac,
-    "cornerrolls": d_cornerrolls, "kat": d_kat,
+    "kat": d_kat,
 }
 
 SCENE = [0]
 
 def build_scene():
     COLL.clear()
+    try:
+        if hasattr(sign_m, "generate_sign_texture"):
+            sign_m.SIGN_TEX[0] = sign_m.generate_sign_texture()
+    except Exception as e:
+        print('[ป้าย] สร้างเท็กซ์เจอร์ไม่ได้:', e)
     lst = glGenLists(1)
     glNewList(lst, GL_COMPILE)
     room_shell(); window_wall(); door_wall(); east_wall(); west_wall()
@@ -495,7 +541,6 @@ def build_scene():
             DISPATCH[code](*args)
         except Exception as e:
             print('[วาดไม่ได้]', code, '->', type(e).__name__, e)
-    cabinet_glass(PANES)
     glEndList()
     SCENE[0] = lst
 
