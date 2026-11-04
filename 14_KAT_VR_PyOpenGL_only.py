@@ -137,11 +137,11 @@ def _seg_digit(d, cx, cy, z, h, col):  # ประกาศสูตร "วา�
 
 
 def make_text_tex(text, color=(10, 178, 235), size=110):
-    """เก็บข้อความโลโก้ไว้ให้ตัววาด GLUT วาดแทน texture เพื่อไม่ต้องใช้ pygame"""
+    """เก็บข้อความโลโก้ไว้ให้ตัววาด GLUT วาดแทน texture"""
     return (text, 1.0)
 
 def _logo_decal(logo, cx, cy, z, h):
-    """วาดข้อความ KAT VR ด้วย GLUT Stroke Font โดยไม่ต้องพึ่ง pygame"""
+    """วาดข้อความ KAT VR ด้วย GLUT Stroke Font"""
     text = logo[0] if logo else "KAT VR"
     glPushMatrix()
     glTranslatef(cx - 0.13, cy - h * 0.32, z)

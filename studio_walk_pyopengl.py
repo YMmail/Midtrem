@@ -92,25 +92,16 @@ class _FB:
             a = k * math.pi / 2 + math.radians(yaw); _cyl(x + .45 * math.cos(a), .12, z + .45 * math.sin(a), .02, .9, (.2, .2, .22))
 
 def _load_shell():
-    """ดึงแปลนห้อง studio_room_shell.py (ไฟล์นั้น import pygame ไว้ -> ใส่ตัวหลอกชั่วคราว ไม่ใช้ pygame จริง)"""
-    import types
+    """ดึงแปลนห้องจาก studio_room_shell.py (PyOpenGL ล้วน)"""
     try:
         import numpy  # noqa  (ไฟล์ shell ใช้สร้างลายพื้น/ผนัง)
     except ImportError:
         sys.exit("ต้องติดตั้ง numpy ก่อน:  pip install numpy")
-    fake = types.ModuleType("pygame"); fake.locals = types.ModuleType("pygame.locals")
-    old = {k: sys.modules.get(k) for k in ("pygame", "pygame.locals")}
-    sys.modules["pygame"], sys.modules["pygame.locals"] = fake, fake.locals
     try:
-        try:
-            return importlib.import_module("studio_room_shell")
-        except ModuleNotFoundError:
-            _fetch("studio_room_shell"); importlib.invalidate_caches()
-            return importlib.import_module("studio_room_shell")
-    finally:
-        for k, v in old.items():
-            if v is None: sys.modules.pop(k, None)
-            else: sys.modules[k] = v
+        return importlib.import_module("studio_room_shell")
+    except ModuleNotFoundError:
+        _fetch("studio_room_shell"); importlib.invalidate_caches()
+        return importlib.import_module("studio_room_shell")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _RAWS = ("https://raw.githubusercontent.com/YMmail/Midtrem/main/",
@@ -577,7 +568,7 @@ def update():
     shell_m.update_door(cam, dt)              # ประตูกระจกเปิดเอง
     glutPostRedisplay()
 
-# ---------- HUD (ข้อความด้วย GLUT bitmap ไม่ใช้ pygame) ----------
+# ---------- HUD (ข้อความด้วย GLUT bitmap) ----------
 FONT = GLUT_BITMAP_HELVETICA_12
 CONTROLS = ["W A S D   Walk", "Shift       Run", "Mouse / Arrows   Look", "R   Back to start",
             "F   Room <-> Corridor", "C   Collision on/off", "H   Show/hide HUD", "Esc   Quit"]

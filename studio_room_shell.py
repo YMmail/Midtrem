@@ -2,10 +2,9 @@
 import math
 import sys
 import numpy as np
-import pygame
-from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
+from OpenGL.GLUT import *
 
 INCH = 0.0254
 W = 305 * INCH
@@ -205,41 +204,33 @@ def wall_pieces(x0, x1, y0, y1, holes):
     return pieces
 
 
+STROKE_H = 119.05
+
+
 def make_text_tex(text, color=(10, 178, 235), size=110):
-    font = pygame.font.Font(None, size)
-    font.set_bold(True)
-    surf = font.render(text, True, color)
-    w, h = surf.get_size()
-    data = pygame.image.tostring(surf, "RGBA", True)
-    tid = glGenTextures(1)
-    glBindTexture(GL_TEXTURE_2D, tid)
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-    gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, w, h, GL_RGBA, GL_UNSIGNED_BYTE, data)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-    return tid, w / h
+    asp = sum(glutStrokeWidth(GLUT_STROKE_ROMAN, ord(ch)) for ch in text) / STROKE_H
+    return text, asp, tuple(v / 255.0 for v in color)
 
 
 def _logo_decal(logo, cx, cy, z, h):
-    tid, asp = logo
-    w = h * asp
-    glEnable(GL_TEXTURE_2D)
-    glBindTexture(GL_TEXTURE_2D, tid)
+    text, asp, col = logo
+    k = h / STROKE_H
+    glDepthMask(GL_FALSE)
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-    glDepthMask(GL_FALSE)
-    glColor3f(1, 1, 1)
-    glBegin(GL_QUADS)
-    glTexCoord2f(0, 0); glVertex3f(cx - w / 2, cy - h / 2, z)
-    glTexCoord2f(1, 0); glVertex3f(cx + w / 2, cy - h / 2, z)
-    glTexCoord2f(1, 1); glVertex3f(cx + w / 2, cy + h / 2, z)
-    glTexCoord2f(0, 1); glVertex3f(cx - w / 2, cy + h / 2, z)
-    glEnd()
-    glDepthMask(GL_TRUE)
+    glEnable(GL_LINE_SMOOTH)
+    glLineWidth(2.0)
+    glColor3f(*col)
+    glPushMatrix()
+    glTranslatef(cx - h * asp / 2, cy - h * 0.38, z)
+    glScalef(k, k, k)
+    for ch in text:
+        glutStrokeCharacter(GLUT_STROKE_ROMAN, ord(ch))
+    glPopMatrix()
+    glLineWidth(1.0)
+    glDisable(GL_LINE_SMOOTH)
     glDisable(GL_BLEND)
-    glDisable(GL_TEXTURE_2D)
+    glDepthMask(GL_TRUE)
 
 
 def upload_texture(arr):
@@ -723,32 +714,12 @@ def move(cam, dx, dz):
 
 
 class Overlay:
+    """HUD ข้อความด้วย GLUT bitmap"""
     def __init__(self):
-        self.font = pygame.font.Font(None, 24)
-        self.tex = glGenTextures(1)
-        self.size = (1, 1)
-        self.last = None
+        self.lines = []
 
     def update(self, lines):
-        if lines == self.last:
-            return
-        self.last = list(lines)
-        surfs = [self.font.render(t, True, (255, 255, 255)) for t in lines]
-        w = max(s.get_width() for s in surfs) + 16
-        h = sum(s.get_height() + 2 for s in surfs) + 12
-        surf = pygame.Surface((w, h), pygame.SRCALPHA)
-        surf.fill((0, 0, 0, 150))
-        y = 6
-        for s in surfs:
-            surf.blit(s, (8, y))
-            y += s.get_height() + 2
-        data = pygame.image.tostring(surf, "RGBA", False)
-        glBindTexture(GL_TEXTURE_2D, self.tex)
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
-        self.size = (w, h)
+        self.lines = list(lines)
 
     def draw(self, sw, sh):
         glMatrixMode(GL_PROJECTION)
@@ -759,20 +730,20 @@ class Overlay:
         glPushMatrix()
         glLoadIdentity()
         glDisable(GL_DEPTH_TEST)
+        glDisable(GL_TEXTURE_2D)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        glEnable(GL_TEXTURE_2D)
-        glBindTexture(GL_TEXTURE_2D, self.tex)
-        glColor3f(1, 1, 1)
-        w, h = self.size
-        x, y = 10, 10
+        w = 12 + 7 * max([len(t) for t in self.lines] + [1])
+        h = 12 + 16 * len(self.lines)
+        glColor4f(0, 0, 0, 0.55)
         glBegin(GL_QUADS)
-        glTexCoord2f(0, 0); glVertex2f(x, y)
-        glTexCoord2f(1, 0); glVertex2f(x + w, y)
-        glTexCoord2f(1, 1); glVertex2f(x + w, y + h)
-        glTexCoord2f(0, 1); glVertex2f(x, y + h)
+        glVertex2f(10, 10); glVertex2f(10 + w, 10); glVertex2f(10 + w, 10 + h); glVertex2f(10, 10 + h)
         glEnd()
-        glDisable(GL_TEXTURE_2D)
+        glColor3f(1, 1, 1)
+        for i, t in enumerate(self.lines):
+            glRasterPos2f(18, 28 + 16 * i)
+            for ch in t:
+                glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, ord(ch))
         glDisable(GL_BLEND)
         glEnable(GL_DEPTH_TEST)
         glPopMatrix()
@@ -782,15 +753,18 @@ class Overlay:
 
 
 FOV = 70.0
+SW, SH = 1280, 720
+SHIFT_KEYS = (112, 113)          # freeglut: GLUT_KEY_SHIFT_L / R
+APP = {}
 
 
 def setup_gl(sw, sh):
-    glViewport(0, 0, sw, sh)
+    glViewport(0, 0, sw, max(sh, 1))
     glEnable(GL_DEPTH_TEST)
     glClearColor(0.05, 0.05, 0.06, 1)
     glMatrixMode(GL_PROJECTION)
     glLoadIdentity()
-    gluPerspective(FOV, sw / sh, 0.03, 60)
+    gluPerspective(FOV, sw / max(sh, 1), 0.03, 60)
     glMatrixMode(GL_MODELVIEW)
 
 
@@ -802,79 +776,134 @@ def render(cam, scene):
     draw_auto_door()
 
 
+def _update():
+    a = APP
+    now = glutGet(GLUT_ELAPSED_TIME)
+    dt = min((now - a["last"]) / 1000.0, 0.05)
+    a["last"] = now
+    cam, keys, arrows = a["cam"], a["keys"], a["arrows"]
+    if GLUT_KEY_LEFT in arrows: cam.yaw -= 1.8 * dt
+    if GLUT_KEY_RIGHT in arrows: cam.yaw += 1.8 * dt
+    if GLUT_KEY_UP in arrows: cam.pitch += 1.2 * dt
+    if GLUT_KEY_DOWN in arrows: cam.pitch -= 1.2 * dt
+    cam.pitch = max(-math.radians(85), min(math.radians(85), cam.pitch))
+    fx, fz = cam.forward()
+    rx, rz = cam.right()
+    vx = vz = 0.0
+    if b'w' in keys: vx += fx; vz += fz
+    if b's' in keys: vx -= fx; vz -= fz
+    if b'd' in keys: vx += rx; vz += rz
+    if b'a' in keys: vx -= rx; vz -= rz
+    n = math.hypot(vx, vz)
+    if n > 0:
+        speed = RUN_SPEED if a["shift"] else WALK_SPEED
+        move(cam, vx / n * speed * dt, vz / n * speed * dt)
+    update_door(cam, dt)
+    glutPostRedisplay()
+
+
+def _display():
+    a = APP
+    cam = a["cam"]
+    render(cam, a["scene"])
+    a["overlay"].update(["x=%.2f  z=%.2f  (m)" % (cam.x, cam.z),
+                         "WASD walk | Shift run | Mouse/Arrows look | R reset | F room/corridor | Esc quit"])
+    a["overlay"].draw(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))
+    glutSwapBuffers()
+
+
+def _reshape(w, h):
+    setup_gl(w, h)
+
+
+def _mods():
+    try:
+        APP["shift"] = bool(glutGetModifiers() & GLUT_ACTIVE_SHIFT)
+    except Exception:
+        pass
+
+
+def _key_down(k, x, y):
+    _mods()
+    cam = APP["cam"]
+    if k == b'\x1b':
+        glutSetCursor(GLUT_CURSOR_INHERIT)
+        try:
+            glutLeaveMainLoop()
+        except Exception:
+            sys.exit(0)
+        return
+    kl = k.lower()
+    if kl == b'r':
+        cam.reset()
+    elif kl == b'f':
+        if cam.z > D:
+            cam.reset()
+        else:
+            cam.x, cam.z = FRONT_START
+            cam.yaw = FRONT_YAW
+            cam.pitch = 0.0
+    else:
+        APP["keys"].add(kl)
+
+
+def _key_up(k, x, y):
+    _mods()
+    APP["keys"].discard(k.lower())
+
+
+def _special_down(k, x, y):
+    if k in SHIFT_KEYS:
+        APP["shift"] = True
+    else:
+        _mods()
+        APP["arrows"].add(k)
+
+
+def _special_up(k, x, y):
+    if k in SHIFT_KEYS:
+        APP["shift"] = False
+    else:
+        _mods()
+        APP["arrows"].discard(k)
+
+
+def _mouse_move(x, y):
+    _mods()
+    cx, cy = glutGet(GLUT_WINDOW_WIDTH) // 2, glutGet(GLUT_WINDOW_HEIGHT) // 2
+    if APP["warp"]:
+        APP["warp"] = False
+        return
+    dx, dy = x - cx, y - cy
+    if dx == 0 and dy == 0:
+        return
+    cam = APP["cam"]
+    cam.yaw += math.radians(dx * 0.12)
+    cam.pitch = max(-math.radians(85), min(math.radians(85), cam.pitch - math.radians(dy * 0.12)))
+    APP["warp"] = True
+    glutWarpPointer(cx, cy)
+
+
 def main():
-    pygame.init()
-    SW, SH = 1280, 720
-    pygame.display.set_mode((SW, SH), DOUBLEBUF | OPENGL)
-    pygame.display.set_caption("Studio Room Shell  (1 unit = 1 m)")
+    glutInit(sys.argv)
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
+    glutInitWindowSize(SW, SH)
+    glutCreateWindow(b"Studio Room Shell  (1 unit = 1 m)")
     setup_gl(SW, SH)
-    scene = build_scene()
-    overlay = Overlay()
-    cam = Camera()
-    clock = pygame.time.Clock()
-    pygame.mouse.set_visible(False)
-    pygame.event.set_grab(True)
-    pygame.mouse.get_rel()
-
-    running = True
-    while running:
-        dt = min(clock.tick(60) / 1000.0, 0.05)
-        for e in pygame.event.get():
-            if e.type == QUIT:
-                running = False
-            elif e.type == KEYDOWN:
-                if e.key == K_ESCAPE:
-                    running = False
-                elif e.key == K_r:
-                    cam.reset()
-                elif e.key == K_f:
-                    if cam.z > D:
-                        cam.reset()
-                    else:
-                        cam.x, cam.z = FRONT_START
-                        cam.yaw = FRONT_YAW
-                        cam.pitch = 0.0
-
-        mx, my = pygame.mouse.get_rel()
-        sens = 0.12
-        cam.yaw += math.radians(mx * sens)
-        cam.pitch -= math.radians(my * sens)
-        keys = pygame.key.get_pressed()
-        if keys[K_LEFT]:
-            cam.yaw -= 1.8 * dt
-        if keys[K_RIGHT]:
-            cam.yaw += 1.8 * dt
-        if keys[K_UP]:
-            cam.pitch += 1.2 * dt
-        if keys[K_DOWN]:
-            cam.pitch -= 1.2 * dt
-        cam.pitch = max(-math.radians(85), min(math.radians(85), cam.pitch))
-
-        fx, fz = cam.forward()
-        rx, rz = cam.right()
-        vx = vz = 0.0
-        if keys[K_w]:
-            vx += fx; vz += fz
-        if keys[K_s]:
-            vx -= fx; vz -= fz
-        if keys[K_d]:
-            vx += rx; vz += rz
-        if keys[K_a]:
-            vx -= rx; vz -= rz
-        n = math.hypot(vx, vz)
-        if n > 0:
-            speed = RUN_SPEED if (keys[K_LSHIFT] or keys[K_RSHIFT]) else WALK_SPEED
-            move(cam, vx / n * speed * dt, vz / n * speed * dt)
-
-        update_door(cam, dt)
-        render(cam, scene)
-        overlay.update(["x=%.2f  z=%.2f  (m)" % (cam.x, cam.z),
-                        "WASD walk | Shift run | Mouse/Arrows look | R reset | F room/corridor | Esc quit"])
-        overlay.draw(SW, SH)
-        pygame.display.flip()
-
-    pygame.quit()
-    sys.exit()
+    APP.update(scene=build_scene(), overlay=Overlay(), cam=Camera(), keys=set(), arrows=set(),
+               shift=False, warp=False, last=glutGet(GLUT_ELAPSED_TIME))
+    glutSetCursor(GLUT_CURSOR_NONE)
+    glutDisplayFunc(_display)
+    glutReshapeFunc(_reshape)
+    glutIdleFunc(_update)
+    glutKeyboardFunc(_key_down)
+    glutKeyboardUpFunc(_key_up)
+    glutSpecialFunc(_special_down)
+    glutSpecialUpFunc(_special_up)
+    glutPassiveMotionFunc(_mouse_move)
+    glutMotionFunc(_mouse_move)
+    glutIgnoreKeyRepeat(1)
+    glutMainLoop()
 
 
 if __name__ == "__main__":

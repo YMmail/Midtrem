@@ -175,11 +175,6 @@ def paper_roll_set(x, z, yaw=0.0, colors=DEFAULT_COLORS, colliders=None):
 
 def _preview():
     import sys
-    import pygame
-    from pygame.locals import (
-        DOUBLEBUF, OPENGL, QUIT, KEYDOWN, K_ESCAPE, K_r,
-        K_w, K_a, K_s, K_d, K_LSHIFT, K_RSHIFT, K_LEFT, K_RIGHT, K_UP, K_DOWN,
-    )
     from OpenGL.GL import (
         glViewport, glEnable, glClearColor, glMatrixMode, glLoadIdentity, glClear,
         glGenLists, glNewList, glEndList, glCallList,
@@ -187,6 +182,16 @@ def _preview():
         GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
     )
     from OpenGL.GLU import gluPerspective, gluLookAt
+    from OpenGL.GLUT import (
+        glutInit, glutInitDisplayMode, glutInitWindowSize, glutCreateWindow, glutDisplayFunc,
+        glutReshapeFunc, glutIdleFunc, glutKeyboardFunc, glutKeyboardUpFunc, glutSpecialFunc,
+        glutSpecialUpFunc, glutPassiveMotionFunc, glutMotionFunc, glutMainLoop, glutSwapBuffers,
+        glutPostRedisplay, glutGet, glutGetModifiers, glutWarpPointer, glutSetCursor,
+        glutIgnoreKeyRepeat, glutLeaveMainLoop,
+        GLUT_DOUBLE, GLUT_RGB, GLUT_DEPTH, GLUT_ELAPSED_TIME, GLUT_WINDOW_WIDTH, GLUT_WINDOW_HEIGHT,
+        GLUT_CURSOR_NONE, GLUT_CURSOR_INHERIT, GLUT_ACTIVE_SHIFT,
+        GLUT_KEY_LEFT, GLUT_KEY_RIGHT, GLUT_KEY_UP, GLUT_KEY_DOWN,
+    )
 
     SW, SH = 1280, 720
     EYE = 1.60
@@ -194,16 +199,12 @@ def _preview():
     WALK, RUN = 1.5, 3.2
     START = (1.8, 1.6, -0.80, -0.50)
 
-    pygame.init()
-    pygame.display.set_mode((SW, SH), DOUBLEBUF | OPENGL)
-    pygame.display.set_caption("Studio Paper Rolls  (1 unit = 1 m)")
-    glViewport(0, 0, SW, SH)
+    glutInit(sys.argv)
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
+    glutInitWindowSize(SW, SH)
+    glutCreateWindow(b"Studio Paper Rolls  (1 unit = 1 m)")
     glEnable(GL_DEPTH_TEST)
     glClearColor(0.05, 0.05, 0.06, 1)
-    glMatrixMode(GL_PROJECTION)
-    glLoadIdentity()
-    gluPerspective(70.0, SW / SH, 0.03, 60)
-    glMatrixMode(GL_MODELVIEW)
 
     colliders = []
     scene = glGenLists(1)
@@ -212,58 +213,116 @@ def _preview():
     glEndList()
 
     cam = list(START)
+    keys, arrows = set(), set()
+    st = {"shift": False, "warp": False, "last": glutGet(GLUT_ELAPSED_TIME)}
 
     def blocked(px, pz):
         return any(x0 - RADIUS < px < x1 + RADIUS and z0 - RADIUS < pz < z1 + RADIUS
                    for (x0, z0, x1, z1) in colliders)
 
-    clock = pygame.time.Clock()
-    pygame.mouse.set_visible(False)
-    pygame.event.set_grab(True)
-    pygame.mouse.get_rel()
+    def mods():
+        try:
+            st["shift"] = bool(glutGetModifiers() & GLUT_ACTIVE_SHIFT)
+        except Exception:
+            pass
 
-    running = True
-    while running:
-        dt = min(clock.tick(60) / 1000.0, 0.05)
-        for e in pygame.event.get():
-            if e.type == QUIT or (e.type == KEYDOWN and e.key == K_ESCAPE):
-                running = False
-            elif e.type == KEYDOWN and e.key == K_r:
-                cam = list(START)
+    def reshape(w, h):
+        glViewport(0, 0, w, max(h, 1))
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluPerspective(70.0, w / max(h, 1), 0.03, 60)
+        glMatrixMode(GL_MODELVIEW)
 
-        mx, my = pygame.mouse.get_rel()
-        cam[2] += math.radians(mx * 0.12)
-        cam[3] -= math.radians(my * 0.12)
-        keys = pygame.key.get_pressed()
-        cam[2] += (keys[K_RIGHT] - keys[K_LEFT]) * 1.8 * dt
-        cam[3] += (keys[K_UP] - keys[K_DOWN]) * 1.2 * dt
-        cam[3] = max(-math.radians(85), min(math.radians(85), cam[3]))
-
-        fx, fz = math.sin(cam[2]), -math.cos(cam[2])
-        rx, rz = math.cos(cam[2]), math.sin(cam[2])
-        f = keys[K_w] - keys[K_s]
-        s = keys[K_d] - keys[K_a]
-        vx, vz = fx * f + rx * s, fz * f + rz * s
-        n = math.hypot(vx, vz)
-        if n > 0:
-            speed = RUN if (keys[K_LSHIFT] or keys[K_RSHIFT]) else WALK
-            dx, dz = vx / n * speed * dt, vz / n * speed * dt
-            if not blocked(cam[0] + dx, cam[1]):
-                cam[0] += dx
-            if not blocked(cam[0], cam[1] + dz):
-                cam[1] += dz
-
+    def display():
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
+        fx, fz = math.sin(cam[2]), -math.cos(cam[2])
         cp = math.cos(cam[3])
         gluLookAt(cam[0], EYE, cam[1],
                   cam[0] + fx * cp, EYE + math.sin(cam[3]), cam[1] + fz * cp,
                   0, 1, 0)
         glCallList(scene)
-        pygame.display.flip()
+        glutSwapBuffers()
 
-    pygame.quit()
-    sys.exit()
+    def update():
+        now = glutGet(GLUT_ELAPSED_TIME)
+        dt = min((now - st["last"]) / 1000.0, 0.05)
+        st["last"] = now
+        cam[2] += ((GLUT_KEY_RIGHT in arrows) - (GLUT_KEY_LEFT in arrows)) * 1.8 * dt
+        cam[3] += ((GLUT_KEY_UP in arrows) - (GLUT_KEY_DOWN in arrows)) * 1.2 * dt
+        cam[3] = max(-math.radians(85), min(math.radians(85), cam[3]))
+        fx, fz = math.sin(cam[2]), -math.cos(cam[2])
+        rx, rz = math.cos(cam[2]), math.sin(cam[2])
+        f = (b'w' in keys) - (b's' in keys)
+        s = (b'd' in keys) - (b'a' in keys)
+        vx, vz = fx * f + rx * s, fz * f + rz * s
+        n = math.hypot(vx, vz)
+        if n > 0:
+            speed = RUN if st["shift"] else WALK
+            dx, dz = vx / n * speed * dt, vz / n * speed * dt
+            if not blocked(cam[0] + dx, cam[1]):
+                cam[0] += dx
+            if not blocked(cam[0], cam[1] + dz):
+                cam[1] += dz
+        glutPostRedisplay()
+
+    def key_down(k, x, y):
+        mods()
+        if k == b'\x1b':
+            glutSetCursor(GLUT_CURSOR_INHERIT)
+            try:
+                glutLeaveMainLoop()
+            except Exception:
+                sys.exit()
+        elif k.lower() == b'r':
+            cam[:] = START
+        else:
+            keys.add(k.lower())
+
+    def key_up(k, x, y):
+        mods()
+        keys.discard(k.lower())
+
+    def special_down(k, x, y):
+        if k in (112, 113):
+            st["shift"] = True
+        else:
+            mods()
+            arrows.add(k)
+
+    def special_up(k, x, y):
+        if k in (112, 113):
+            st["shift"] = False
+        else:
+            mods()
+            arrows.discard(k)
+
+    def mouse_move(x, y):
+        mods()
+        cx, cy = glutGet(GLUT_WINDOW_WIDTH) // 2, glutGet(GLUT_WINDOW_HEIGHT) // 2
+        if st["warp"]:
+            st["warp"] = False
+            return
+        dx, dy = x - cx, y - cy
+        if dx == 0 and dy == 0:
+            return
+        cam[2] += math.radians(dx * 0.12)
+        cam[3] = max(-math.radians(85), min(math.radians(85), cam[3] - math.radians(dy * 0.12)))
+        st["warp"] = True
+        glutWarpPointer(cx, cy)
+
+    glutSetCursor(GLUT_CURSOR_NONE)
+    glutDisplayFunc(display)
+    glutReshapeFunc(reshape)
+    glutIdleFunc(update)
+    glutKeyboardFunc(key_down)
+    glutKeyboardUpFunc(key_up)
+    glutSpecialFunc(special_down)
+    glutSpecialUpFunc(special_up)
+    glutPassiveMotionFunc(mouse_move)
+    glutMotionFunc(mouse_move)
+    glutIgnoreKeyRepeat(1)
+    glutMainLoop()
 
 
 if __name__ == "__main__":
