@@ -164,6 +164,8 @@ items_m        = [_imp(n) for n in ITEM_NAMES]
 fan_m          = _imp("fan")
 sign_m         = _imp("studio_sign")            # ป้ายหน้าห้อง (แทน front_sign เดิม)
 shoe_m         = _imp("front_shoe_racks")
+whiteboard_m   = _imp("studio_whiteboard")
+details_m      = _imp("studio_wall_details")
 rolls_m        = _imp("studio_paper_rolls")      # ม้วนฉากกระดาษใต้กระดาน (ชุดเดียวแทน paper_roll*, 12.x, 13)
 
 # ============ 2) ขนาดห้อง (เมตร) X=ซ้าย->ขวา Y=สูง Z=หน้าต่าง->ประตู ============
@@ -200,7 +202,7 @@ LAYOUT = [
     ("jbl",      (4.95, 1.50, 0)),
     ("chair",    (2.37, BLACK_TABLE_Z - 0.58, -1)),
     ("barstool", (5.85, 8.55, 0)), ("barstool", (5.30, 8.55, -6)),
-    ("stoolstack", ()), ("pac", (W - 0.31, 0.85)),
+    ("stoolstack", ()), ("pac", (W - 0.31, 0.85)), ("cornerrolls", ()),
     ("fan", ()), ("sign", ()), ("shoes", ()),
     ("kat",      (W - 0.75, D - 0.75, 225)),
 ]
@@ -253,22 +255,6 @@ DOOR_HOLES = [(DOOR_A, DOOR_B, 0.0, DOOR_OPEN_H), (DOOR_A, DOOR_B, DOOR_OPEN_H +
              + [(a, b, STRIP_Y0, STRIP_Y1) for a, b in STRIP_X]
 
 # ============ 5) โครงห้อง ============
-def west_wall():
-    z0, z1 = 2.3, 7.1; zm = (z0 + z1) / 2
-    y0 = 1.05; y1 = y0 + 47.5 * INCH; yt = y1 + .10
-    br, kr = (.20, .11, .08), (.72, .56, .38)
-    box(0, y0, z0, .03, y1, z1, (.94, .95, .96))
-    box(0, y1, z0 - .04, .09, y1 + .10, z1 + .04, br)
-    box(0, y0 - .06, z0 - .04, .12, y0, z1 + .04, br)
-    box(.10, y0 - .06, z0 - .04, .12, y0 + .015, z1 + .04, br)
-    box(0, y0, z0 - .04, .04, y1, z0, br); box(0, y0, z1, .04, y1, z1 + .04, br)
-    box(0, y0, zm - .005, .031, y1, zm + .005, (.7, .7, .7))
-    box(0, yt, 4.70, .14, yt + .075, 6.04, kr)
-    box(0, yt, 3.26, .14, yt + .075, 4.66, tuple(v * .94 for v in kr))
-    box(0, yt, 6.62, .06, yt + .045, 6.95, (.55, .40, .25))
-    for z in (z0 + .45, z0 + 1.55, zm, z1 - 1.55, z1 - .45):
-        box(0, y0 - .14, z - .02, .05, y0 - .06, z + .02, (.12, .07, .05))
-
 def draw_aircon(cx):
     aircon_m.aircon(cx, 0.55, H - 0.40)
     for dx in (-.6, .6):
@@ -415,6 +401,13 @@ def d_paperrolls():
     if hasattr(rolls_m, "paper_roll_set"):
         rolls_m.paper_roll_set(0.0, 4.325, 0.0, colliders=COLL)
 
+def d_cornerrolls():
+    # ม้วนฉากมุมตะวันออก-หน้าต่าง (ตำแหน่งเดียวกับ corner_stuff ของ Final) ใช้ paper_roll จาก studio_paper_rolls
+    COLL.append((5.64, 0.0, 7.16, 0.40))
+    rolls_m.paper_roll(5.70, 7.06, 0.070, 0.085, 0.070, (0.95, 0.95, 0.94))
+    rolls_m.paper_roll(5.70, 7.06, 0.065, 0.225, 0.065, (0.95, 0.55, 0.65), tail=0.40)
+    rolls_m.paper_roll(5.74, 7.10, 0.180, 0.155, 0.060, (0.74, 0.57, 0.36))
+
 def d_cabitems():
     for m_ in items_m:
         _place(m_)
@@ -472,7 +465,7 @@ def d_shoes():
 
 DISPATCH = {
     "aircon": draw_aircon, "softbox": d_softbox,
-    "dome": d_dome, "cabinet": d_cabinet, "paperrolls": d_paperrolls, "cabitems": d_cabitems, "fan": d_fan, "sign": d_sign, "shoes": d_shoes, "cstands": d_cstands,
+    "dome": d_dome, "cabinet": d_cabinet, "paperrolls": d_paperrolls, "cabitems": d_cabitems, "cornerrolls": d_cornerrolls, "fan": d_fan, "sign": d_sign, "shoes": d_shoes, "cstands": d_cstands,
     "rows": d_rows, "blacktable": d_blacktable, "tv": d_tv, "jbl": d_jbl, "chair": d_chair,
     "barstool": d_barstool, "stoolstack": d_stoolstack, "pac": d_pac,
     "kat": d_kat,
@@ -495,7 +488,8 @@ def build_scene():
     S.front_shell(ter, fwall); S.front_door(); S.front_strip_windows(); S.wall_glass()       # ทางเดินหน้าห้อง
     S.front_baseboard(); S.front_window_wall()
     cut_fan_hole(S)                                                                           # เจาะกระจกให้พัดลม
-    west_wall()
+    whiteboard_m.whiteboard()                                                                  # ไวท์บอร์ด (import)
+    details_m.wall_wires(S.W, S.D, S.H); details_m.light_switches(S.D)                         # สายไฟ + สวิตช์ (import)
     for code, args in LAYOUT:                    # วนอ่านตารางแล้วแมปลง 3D
         try:
             DISPATCH[code](*args)
