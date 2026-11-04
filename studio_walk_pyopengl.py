@@ -113,7 +113,8 @@ def _load_shell():
             else: sys.modules[k] = v
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_RAW = "https://raw.githubusercontent.com/YMmail/Midtrem/main/"
+_RAWS = ("https://raw.githubusercontent.com/YMmail/Midtrem/main/",
+         "https://raw.githubusercontent.com/YMmail/Midtrem/add-studio-walk-pyopengl/")
 _CACHE = os.path.join(_HERE, "_models")
 os.makedirs(_CACHE, exist_ok=True)
 for _p in (_HERE, os.getcwd(), _CACHE):
@@ -124,7 +125,13 @@ def _fetch(name):
     import urllib.request, urllib.parse
     dst = os.path.join(_CACHE, name + ".py")
     if not os.path.exists(dst):
-        urllib.request.urlretrieve(_RAW + urllib.parse.quote(name + ".py"), dst)
+        err = None
+        for base in _RAWS:                       # ลอง main ก่อน แล้วค่อย branch งานนี้
+            try:
+                urllib.request.urlretrieve(base + urllib.parse.quote(name + ".py"), dst); return dst
+            except Exception as e:
+                err = e
+        raise err
     return dst
 
 def _imp(name):
@@ -165,7 +172,7 @@ items_m        = [_imp(n) for n in ITEM_NAMES]
 fan_m          = _imp("fan")
 sign_m         = _imp("front_sign")
 shoe_m         = _imp("front_shoe_racks")
-# ม้วนกระดาษ (paper_roll*, 12.x, 13) ยังไม่ดึง ตามที่สั่ง
+rolls_m        = _imp("studio_paper_rolls")      # ม้วนฉากกระดาษใต้กระดาน (ชุดเดียวแทน paper_roll*, 12.x, 13)
 
 # ============ 2) ขนาดห้อง (เมตร) X=ซ้าย->ขวา Y=สูง Z=หน้าต่าง->ประตู ============
 INCH = 0.0254
@@ -196,7 +203,7 @@ LAYOUT = [
     ("aircon",   (1.75,)), ("aircon", (6.00,)),
     ("softbox",  (4.35, 0.55, 8)), ("softbox", (6.65, 0.95, -25)),
     ("dome",     (3.25, 0.62)), ("dome", (5.65, 0.95)),
-    ("cabinet",  ()), ("cabitems", ()), ("cstands", ()),
+    ("cabinet",  ()), ("paperrolls", ()), ("cabitems", ()), ("cstands", ()),
     ("rows",     ()), ("blacktable", ()), ("tv", (4.05, BLACK_TABLE_Z)),
     ("jbl",      (4.95, 1.50, 0)),
     ("chair",    (2.37, BLACK_TABLE_Z - 0.58, -1)),
@@ -411,6 +418,11 @@ def d_cabinet():
     _place(cab_m)
     COLL.append((.02, .50, .48, 1.98))
 
+def d_paperrolls():
+    # ชุดม้วนกระดาษ 5 ม้วนใต้กระดานฝั่งตะวันตก (ติดผนัง x=0, กึ่งกลางชุดที่ z=4.325 -> ม้วนอยู่ z 2.78-5.86 เหมือนเดิม)
+    if hasattr(rolls_m, "paper_roll_set"):
+        rolls_m.paper_roll_set(0.0, 4.325, 0.0, colliders=COLL)
+
 def d_cabitems():
     for m_ in items_m:
         _place(m_)
@@ -468,7 +480,7 @@ def d_shoes():
 
 DISPATCH = {
     "aircon": draw_aircon, "softbox": d_softbox,
-    "dome": d_dome, "cabinet": d_cabinet, "cabitems": d_cabitems, "fan": d_fan, "sign": d_sign, "shoes": d_shoes, "cstands": d_cstands,
+    "dome": d_dome, "cabinet": d_cabinet, "paperrolls": d_paperrolls, "cabitems": d_cabitems, "fan": d_fan, "sign": d_sign, "shoes": d_shoes, "cstands": d_cstands,
     "rows": d_rows, "blacktable": d_blacktable, "tv": d_tv, "jbl": d_jbl, "chair": d_chair,
     "barstool": d_barstool, "stoolstack": d_stoolstack, "pac": d_pac,
     "kat": d_kat,
