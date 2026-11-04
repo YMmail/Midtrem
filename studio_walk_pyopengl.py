@@ -24,73 +24,6 @@ def _cyl(x, y, z, r, h, c, axis='y'):
 def _yaw(x, z, yaw):
     glPushMatrix(); glTranslatef(x, 0, z); glRotatef(yaw, 0, 1, 0)
 
-class _FB:
-    """โมเดลง่ายๆ แทนไฟล์เก่า"""
-    LOGO_TEX = None
-    my_logo = None
-    def aircon(self, cx, y, z):
-        box(cx - .60, y - .14, z - .445, cx + .60, y + .14, z + .445, (.93, .91, .84))
-    def paper_roll(self, a, b, cy, xo, r, col):
-        _cyl(a, cy, xo, r, b - a, col, 'x')
-    def paper_roll_unrolled(self, z0, z1, cy, xo, r, col, off=0.0):
-        _cyl(xo, cy, z0, r, z1 - z0, col, 'z')
-    def training_table(self, x0, zr, length, depth):
-        box(x0, .70, zr, x0 + length, .73, zr + depth, WOOD)
-        box(x0, .28, zr + depth - .03, x0 + length, .66, zr + depth, (.90, .90, .92))
-        for xx in (x0 + .06, x0 + length - .06):
-            box(xx - .015, 0, zr + .05, xx + .015, .70, zr + depth - .05, (.82, .82, .85))
-    def stool(self, x, y, z, dots=False):
-        _cyl(x, y + .42, z, .17, .03, (.93, .93, .93))
-        for dx, dz in ((.10, .10), (-.10, .10), (.10, -.10), (-.10, -.10)):
-            _cyl(x + dx, y, z + dz, .012, .42, (.7, .7, .72))
-    def bar_stool(self, x, z, yaw):
-        _cyl(x, .70, z, .18, .04, (.95, .95, .95))
-        for dx, dz in ((.10, .10), (-.10, .10), (.10, -.10), (-.10, -.10)):
-            _cyl(x + dx, 0, z + dz, .014, .70, (.75, .58, .38))
-    def mic(self, x, y, z, yaw):
-        _yaw(x, z, yaw); _cyl(0, y + .02, 0, .02, .25, (.10, .10, .11), 'x'); glPopMatrix()
-    def keyboard(self, x, y, z):
-        box(x - .14, y, z - .055, x + .14, y + .012, z + .055, (.92, .92, .92))
-    def magic_mouse(self, x, y, z, yaw):
-        _yaw(x, z, yaw); box(-.028, y, -.056, .028, y + .012, .056, (.95, .95, .95)); glPopMatrix()
-    def imac(self, x, ty, z, w, h, logo=None):
-        box(x - w / 2, ty + .12, z - .01, x + w / 2, ty + .12 + h, z + .01, (.92, .92, .92))
-        box(x - w / 2 + .01, ty + .13, z + .01, x + w / 2 - .01, ty + .11 + h, z + .012, (.05, .05, .07))
-        box(x - .10, ty, z - .09, x + .10, ty + .012, z + .09, (.9, .9, .9))
-        box(x - .02, ty, z - .015, x + .02, ty + .12, z, (.9, .9, .9))
-    def portable_ac(self, x, z):
-        box(x - .14, 0, z - .225, x + .14, .85, z + .225, (.93, .91, .85))
-    def softbox_rect(self, x, z, yaw):
-        _yaw(x, z, yaw)
-        _cyl(0, 0, 0, .02, 1.55, (.2, .2, .2)); box(-.30, 1.30, -.20, .30, 1.90, .20, (.05, .05, .06))
-        glPopMatrix()
-    def dome_para(self, x, z, ribs=True):
-        glColor3f(.06, .06, .07); glPushMatrix(); glTranslatef(x, 0, z); glScalef(.30, .69, .30)
-        q = gluNewQuadric(); gluSphere(q, 1.0, 20, 10); gluDeleteQuadric(q); glPopMatrix()
-    def tv_stand(self, cx, pz):
-        box(cx - .62, 1.42 - .71, pz - .08, cx + .62, 1.42, pz - .04, (.03, .03, .04))
-        box(cx - .04, 0, pz - .08, cx + .04, .72, pz - .04, (.15, .15, .17))
-        box(cx - .30, 0, pz - .45, cx + .30, .03, pz - .04, (.12, .12, .13))
-    def black_table(self, cx, cz):
-        box(cx - 30 * INCH, 0, cz - 23.5 * INCH / 2, cx + 30 * INCH, 29.5 * INCH, cz + 23.5 * INCH / 2, (.04, .04, .05))
-    def jbl_speaker(self, x, z, yaw):
-        _yaw(x, z, yaw); box(-.163, 0, -.184, .163, .75, .184, (.07, .07, .08)); box(-.12, .45, .184, .12, .55, .19, (.95, .45, .1)); glPopMatrix()
-    def c_stand(self, x, z, lean=0.0):
-        _cyl(x, 0, z, .018, 1.9, (.78, .80, .82))
-        for dx in (-.25, .25): box(x + dx - .01, 0, z - .01, x + dx + .01, .03, z + .01, (.78, .80, .82))
-    def office_chair(self, x, z, f, coll=None):
-        _cyl(x, 0, z, .24, .04, (.1, .1, .1)); _cyl(x, .04, z, .025, .40, (.2, .2, .2))
-        box(x - .23, .44, z - .235, x + .23, .53, z + .235, (.45, .22, .12))
-        bz = z + f * .22
-        box(x - .23, .53, bz - .04, x + .23, .99, bz + .04, (.25, .15, .10))
-        if coll is not None: coll.append((x - .3, z - .3, x + .3, z + .3))
-    def stool_stack_positions(self, D):
-        return [(0.35, D - 0.45), (0.35, D - 1.05)]
-    def kat_vr(self, tex, x, z, yaw):
-        _cyl(x, 0, z, .55, .12, (.08, .08, .10)); _cyl(x, 1.0, z, .45, .03, (.2, .2, .22))
-        for k in range(4):
-            a = k * math.pi / 2 + math.radians(yaw); _cyl(x + .45 * math.cos(a), .12, z + .45 * math.sin(a), .02, .9, (.2, .2, .22))
-
 def _load_shell():
     """ดึงแปลนห้องจาก studio_room_shell.py (PyOpenGL ล้วน)"""
     try:
@@ -133,10 +66,9 @@ def _imp(name):
             _fetch(name); importlib.invalidate_caches()
             return importlib.import_module(name)
         except Exception as e:
-            print("[ใช้โมเดลสำรอง]", name, "->", e)
+            raise SystemExit("[import ไม่ได้] %s -> %s  (วางไฟล์ %s.py ไว้โฟลเดอร์เดียวกับไฟล์นี้)" % (name, e, name))
     except Exception as e:
-        print("[import พัง]", name, "->", type(e).__name__, e)
-    return _FB()
+        raise SystemExit("[import พัง] %s -> %s: %s" % (name, type(e).__name__, e))
 
 _imp("studio_sign")
 shell_m        = _load_shell()          # แปลนห้อง (ผนัง หน้าต่าง ประตู ทางเดิน) จาก studio_room_shell.py
@@ -257,8 +189,7 @@ DOOR_HOLES = [(DOOR_A, DOOR_B, 0.0, DOOR_OPEN_H), (DOOR_A, DOOR_B, DOOR_OPEN_H +
 # ============ 5) โครงห้อง ============
 def draw_aircon(cx):
     aircon_m.aircon(cx, 0.55, H - 0.40)
-    for dx in (-.6, .6):
-        box(cx + dx - .01, H - .15, .87, cx + dx + .01, H, .89, STEEL)
+    details_m.aircon_brackets(cx, H)
 
 # ============ 6) ตู้เหล็ก ============
 def draw_cabinet():
@@ -302,9 +233,6 @@ def cabinet_glass(panes):
 # ============ 7) ตัวแปลงรหัส -> ฟังก์ชันวาด ============
 PANES = []
 
-def ph(m, x0, z0, x1, z1, h, c=(.75, .45, .25)):
-    pass
-
 def d_rows():
     n, depth, length, per = 4, .6, 1.8, 3
     zs = BLACK_TABLE_Z + 23.5 * INCH / 2
@@ -314,7 +242,7 @@ def d_rows():
         zr = zs + ROW_GAP + r * (depth + ROW_GAP)
         for i in range(per):
             table_m.training_table(x0 + i * length, zr, length, depth)
-            ph(table_m, x0 + i * length, zr, x0 + (i + 1) * length, zr + depth, .75, (.80, .70, .55))
+
         COLL.append((x0, zr, x0 + per * length, zr + depth))
         for i in range(per):
             if rng.random() < .55:
@@ -325,7 +253,7 @@ def d_rows():
 def d_blacktable():
     cx, cz, ty = 2.62, BLACK_TABLE_Z, 29.5 * INCH
     btable_m.black_table(cx, cz)
-    ph(btable_m, cx - 30 * INCH, cz - 23.5 * INCH / 2, cx + 30 * INCH, cz + 23.5 * INCH / 2, ty, (.08, .08, .09))
+
     COLL.append((cx - 30 * INCH, cz - 23.5 * INCH / 2, cx + 30 * INCH, cz + 23.5 * INCH / 2))
     glPushMatrix(); glTranslatef(*(DESK_SHIFT[0], 0, DESK_SHIFT[1]))
     ix, iz = 3.00, 1.58
@@ -340,45 +268,45 @@ def d_blacktable():
 
 def d_tv(cx, pz):
     tv_m.tv_stand(cx, pz)
-    ph(tv_m, cx - 49 * INCH / 2, pz - .105, cx + 49 * INCH / 2, pz, 1.50, (.05, .05, .06))
+
     COLL.append((cx - 49 * INCH / 2, pz - .105, cx + 49 * INCH / 2, pz))
 
 def d_cstands():
     for i in range(7):
         cstand_m.c_stand(.95, .62 + i * .10, .18 + .04 * i)
-    ph(cstand_m, .88, .55, 1.02, 1.30, 1.80, (.3, .3, .32))
+
     COLL.append((.88, .55, 1.02, 1.30))
 
 def d_stoolstack():
     for (x, z) in office_chair_m.stool_stack_positions(D):
         for k in range(5):
             stool_m.stool(x, k * .14, z, dots=True)
-        ph(stool_m, x - .26, z - .26, x + .26, z + .26, .70, (.9, .5, .6))
+
         COLL.append((x - .26, z - .26, x + .26, z + .26))
 
 def d_softbox(x, z, yaw):
     softbox_m.softbox_rect(x, z, yaw)
-    ph(softbox_m, x - .4, z - .4, x + .4, z + .4, 1.9, (.9, .9, .9))
+
     COLL.append((x - .5, z - .5, x + .5, z + .5))
 
 def d_dome(x, z):
-    dome_m.dome_para(x, z, ribs=True); ph(dome_m, x - .38, z - .38, x + .38, z + .38, 2.0, (.85, .85, .85)); COLL.append((x - .38, z - .38, x + .38, z + .38))
+    dome_m.dome_para(x, z, ribs=True); COLL.append((x - .38, z - .38, x + .38, z + .38))
 
 def d_jbl(x, z, yaw):
-    jbl_m.jbl_speaker(x, z, yaw); ph(jbl_m, x - .163, z - .184, x + .163, z + .184, .55, (.1, .1, .1)); COLL.append((x - .163, z - .184, x + .163, z + .184))
+    jbl_m.jbl_speaker(x, z, yaw); COLL.append((x - .163, z - .184, x + .163, z + .184))
 
 def d_chair(x, z, f):
     office_chair_m.office_chair(x, z, f, COLL)
-    ph(office_chair_m, x - .3, z - .3, x + .3, z + .3, .95, (.15, .15, .17))
+
 
 def d_barstool(x, z, yaw):
-    barstool_m.bar_stool(x, z, yaw); ph(barstool_m, x - .27, z - .27, x + .27, z + .27, .75, (.2, .2, .2)); COLL.append((x - .27, z - .27, x + .27, z + .27))
+    barstool_m.bar_stool(x, z, yaw); COLL.append((x - .27, z - .27, x + .27, z + .27))
 
 def d_pac(x, z):
-    pac_m.portable_ac(x, z); ph(pac_m, x - .14, z - .225, x + .14, z + .225, .85, (.9, .9, .92)); COLL.append((x - .14, z - .225, x + .14, z + .225))
+    pac_m.portable_ac(x, z); COLL.append((x - .14, z - .225, x + .14, z + .225))
 
 def d_kat(x, z, yaw):
-    kat_m.kat_vr(kat_m.LOGO_TEX, x, z, yaw); ph(kat_m, x - .6, z - .6, x + .6, z + .6, 2.2, (.1, .1, .15)); COLL.append((x - .6, z - .6, x + .6, z + .6))
+    kat_m.kat_vr(kat_m.LOGO_TEX, x, z, yaw); COLL.append((x - .6, z - .6, x + .6, z + .6))
 
 _TR = re.compile(r"glTranslatef\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)")
 

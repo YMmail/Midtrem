@@ -89,3 +89,9 @@ def light_switches(D):
         zf = z - 0.0153
         gquad([(mx - 0.009, cy - 0.016, zf), (mx + 0.009, cy - 0.016, zf),
                (mx + 0.009, cy, zf), (mx - 0.009, cy, zf)], [rocker_lo] * 4)
+
+
+def aircon_brackets(cx, H, steel=(0.62, 0.64, 0.67)):
+    """ขายึดแอร์ 2 แท่งที่ยึดกับเพดาน (ซ้าย/ขวาของตัวแอร์)"""
+    for dx in (-.6, .6):
+        box(cx + dx - .01, H - .15, .87, cx + dx + .01, H, .89, steel)
