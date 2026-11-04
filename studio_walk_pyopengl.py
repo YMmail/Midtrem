@@ -3,7 +3,7 @@
 """Studio Room Walkthrough (PyOpenGL + GLUT เท่านั้น)
 ขนาดห้อง/ตำแหน่งของทุกชิ้นอ่านมาจาก Final Code 209_219_258_260_270 (ไม่ได้ import ไฟล์นั้น)
 ชิ้นงานดึงจากไฟล์ย่อยเดิมด้วย import
-W A S D เดิน | เมาส์หันมอง | Shift วิ่ง | C เปิด/ปิดชน | R รีเซ็ต | Esc ออก"""
+W A S D เดิน | Shift วิ่ง | เมาส์/ลูกศร หมุนกล้อง | R กลับจุดเริ่ม | F สลับห้อง/ทางเดิน | H ซ่อน HUD | Esc ออก"""
 import math, os, sys, random, importlib, re, inspect
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from OpenGL.GL import *
@@ -504,6 +504,16 @@ def move(dx, dz):
     nz = cam.z + dz
     if not blocked(cam.x, nz) or (stuck and dc(cam.x, nz) >= dc(cam.x, cam.z)): cam.z = nz
 
+state.update({"shift": False, "hud": True, "fps": 0.0, "frames": 0, "t0": 0})
+arrows = set()
+TURN_YAW, TURN_PITCH = math.radians(100), math.radians(70)     # ลูกศรหมุนกล้อง (องศา/วินาที)
+SHIFT_KEYS = (112, 113)                                  # freeglut: GLUT_KEY_SHIFT_L / R
+
+def area_name():
+    if cam.z > D + 0.12: return "Corridor"
+    if cam.z > D - 0.1 and DOOR_A < cam.x < DOOR_B: return "Doorway"
+    return "Studio room"
+
 def update():
     now = glutGet(GLUT_ELAPSED_TIME)
     dt = min((now - state["last"]) / 1000.0, 0.05); state["last"] = now
@@ -516,11 +526,54 @@ def update():
     if b'a' in keys: vx -= rx; vz -= rz
     n = math.hypot(vx, vz)
     if n > 0:
-        sp = RUN if 'shift' in keys else WALK
+        sp = RUN if state["shift"] else WALK
         move(vx / n * sp * dt, vz / n * sp * dt)
+    if GLUT_KEY_LEFT in arrows: cam.yaw -= TURN_YAW * dt
+    if GLUT_KEY_RIGHT in arrows: cam.yaw += TURN_YAW * dt
+    if GLUT_KEY_UP in arrows: cam.pitch = min(1.4, cam.pitch + TURN_PITCH * dt)
+    if GLUT_KEY_DOWN in arrows: cam.pitch = max(-1.4, cam.pitch - TURN_PITCH * dt)
     cam.y = min(EYE_MAX, cam.y)
     shell_m.update_door(cam, dt)              # ประตูกระจกเปิดเอง
     glutPostRedisplay()
+
+# ---------- HUD (ข้อความด้วย GLUT bitmap ไม่ใช้ pygame) ----------
+FONT = GLUT_BITMAP_HELVETICA_12
+CONTROLS = ["W A S D   Walk", "Shift       Run", "Mouse / Arrows   Look", "R   Back to start",
+            "F   Room <-> Corridor", "C   Collision on/off", "H   Show/hide HUD", "Esc   Quit"]
+
+def _text(x, y, t, col=(1, 1, 1)):
+    glColor3f(*col); glRasterPos2f(x, y)
+    for ch in t: glutBitmapCharacter(FONT, ord(ch))
+
+def draw_hud(w, h):
+    glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); glOrtho(0, w, 0, h, -1, 1)
+    glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity()
+    glDisable(GL_DEPTH_TEST); glDisable(GL_TEXTURE_2D)
+    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    # จุดเล็งกลางจอ
+    glColor4f(1, 1, 1, .8); glBegin(GL_LINES)
+    glVertex2f(w / 2 - 6, h / 2); glVertex2f(w / 2 + 6, h / 2); glVertex2f(w / 2, h / 2 - 6); glVertex2f(w / 2, h / 2 + 6)
+    glEnd()
+    if state["hud"]:
+        info = ["STUDIO WALKTHROUGH",
+                "Area : %s" % area_name(),
+                "Pos  : x %.2f  z %.2f  (m)" % (cam.x, cam.z),
+                "Eye  : %.0f cm  (max %.0f)" % (cam.y * 100, EYE_MAX * 100),
+                "Yaw  : %.0f deg" % (math.degrees(cam.yaw) % 360),
+                "Move : %s" % ("RUN" if state["shift"] else "WALK"),
+                "Collision : %s" % ("ON" if state["collide"] else "OFF"),
+                "FPS  : %.0f" % state["fps"]]
+        glColor4f(0, 0, 0, .50); glBegin(GL_QUADS)
+        glVertex2f(8, h - 8); glVertex2f(250, h - 8); glVertex2f(250, h - 14 - 16 * len(info)); glVertex2f(8, h - 14 - 16 * len(info))
+        bh = 14 + 16 * len(CONTROLS)
+        glVertex2f(8, 8); glVertex2f(210, 8); glVertex2f(210, 8 + bh); glVertex2f(8, 8 + bh)
+        glEnd()
+        for i, t in enumerate(info):
+            _text(16, h - 26 - 16 * i, t, (1, .85, .3) if i == 0 else (1, 1, 1))
+        for i, t in enumerate(CONTROLS):
+            _text(16, 8 + bh - 22 - 16 * i, t, (.8, .9, 1))
+    glDisable(GL_BLEND); glEnable(GL_DEPTH_TEST)
+    glPopMatrix(); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW)
 
 def display():
     glClearColor(.05, .05, .06, 1)
@@ -531,32 +584,61 @@ def display():
               cam.z - math.cos(cam.yaw) * cp, 0, 1, 0)
     glCallList(SCENE[0])
     shell_m.draw_auto_door()
+    now = glutGet(GLUT_ELAPSED_TIME); state["frames"] += 1
+    if now - state["t0"] >= 500:
+        state["fps"] = state["frames"] * 1000.0 / max(now - state["t0"], 1); state["frames"] = 0; state["t0"] = now
+    draw_hud(glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))
     glutSwapBuffers()
 
 def reshape(w, h):
     glViewport(0, 0, w, max(h, 1)); glMatrixMode(GL_PROJECTION); glLoadIdentity()
     gluPerspective(70, w / max(h, 1), .03, 60); glMatrixMode(GL_MODELVIEW)
 
+def quit_app():
+    glutSetCursor(GLUT_CURSOR_INHERIT)
+    try: glutLeaveMainLoop()                 # freeglut: ออกจากลูปอย่างสะอาด
+    except Exception: sys.exit(0)
+
+def _mods():
+    try: state["shift"] = bool(glutGetModifiers() & GLUT_ACTIVE_SHIFT)
+    except Exception: pass
+
+def go_start():
+    cam.x, cam.z = START_POS; cam.yaw, cam.pitch = START_YAW, 0.0
+
 def key_down(k, x, y):
-    if k == b'\x1b': sys.exit(0)
-    if k in (b'c', b'C'): state["collide"] = not state["collide"]
-    elif k in (b'f', b'F'): cam.x, cam.z = FRONT_START; cam.yaw, cam.pitch = FRONT_YAW, 0.0
-    elif k in (b'r', b'R'): cam.x, cam.z = START_POS; cam.yaw, cam.pitch = START_YAW, 0.0
-    else: keys.add(k.lower())
+    _mods()
+    if k == b'\x1b': quit_app(); return
+    kl = k.lower()
+    if kl == b'c': state["collide"] = not state["collide"]
+    elif kl == b'h': state["hud"] = not state["hud"]
+    elif kl == b'r': go_start()
+    elif kl == b'f':                                       # สลับห้อง <-> ทางเดิน
+        if cam.z > D: go_start()
+        else: cam.x, cam.z = FRONT_START; cam.yaw, cam.pitch = FRONT_YAW, 0.0
+    else: keys.add(kl)
 
 def key_up(k, x, y):
-    keys.discard(k.lower())
+    _mods(); keys.discard(k.lower())
 
 def special_down(k, x, y):
-    if glutGetModifiers() & GLUT_ACTIVE_SHIFT: keys.add('shift')
+    if k in SHIFT_KEYS: state["shift"] = True
+    else: _mods(); arrows.add(k)
+
+def special_up(k, x, y):
+    if k in SHIFT_KEYS: state["shift"] = False
+    else: _mods(); arrows.discard(k)
 
 def mouse_move(x, y):
+    _mods()
     w, h = glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT)
     cx, cy = w // 2, h // 2
     if state["warp"]:
         state["warp"] = False; return
-    cam.yaw += math.radians((x - cx) * .12)
-    cam.pitch = max(-1.4, min(1.4, cam.pitch - math.radians((y - cy) * .12)))
+    dx, dy = x - cx, y - cy
+    if dx == 0 and dy == 0: return
+    cam.yaw += math.radians(dx * .12)
+    cam.pitch = max(-1.4, min(1.4, cam.pitch - math.radians(dy * .12)))
     state["warp"] = True; glutWarpPointer(cx, cy)
 
 def main():
@@ -565,11 +647,13 @@ def main():
     glutInitWindowSize(1280, 720); glutCreateWindow(b"Studio Walkthrough (1 unit = 1 m)")
     glEnable(GL_DEPTH_TEST)
     build_scene()
-    state["last"] = glutGet(GLUT_ELAPSED_TIME)
+    state["last"] = state["t0"] = glutGet(GLUT_ELAPSED_TIME)
     glutSetCursor(GLUT_CURSOR_NONE)
     glutDisplayFunc(display); glutReshapeFunc(reshape); glutIdleFunc(update)
     glutKeyboardFunc(key_down); glutKeyboardUpFunc(key_up)
+    glutSpecialFunc(special_down); glutSpecialUpFunc(special_up)
     glutPassiveMotionFunc(mouse_move); glutMotionFunc(mouse_move)
+    glutIgnoreKeyRepeat(1)
     glutMainLoop()
 
 if __name__ == "__main__":
