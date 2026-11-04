@@ -131,6 +131,8 @@ COLL = []                            # กล่องชน (x0,z0,x1,z1)
 
 # ============ 3) ตารางข้อมูลวัตถุ (วนลูปอ่านแล้วแมปลง 3D) ============
 # (รหัส, พารามิเตอร์)  รหัสแปลงเป็นฟังก์ชันวาดใน DISPATCH
+BARSTOOL_SEAT_H = 0.90      # ความสูงที่นั่งเก้าอี้เคาน์เตอร์บาร์ (เมตร) ~ระดับเอว  (เดิม 0.625)
+
 LAYOUT = [
     ("aircon",   (1.75,)), ("aircon", (6.00,)),
     ("softbox",  (4.35, 0.55, 8)), ("softbox", (6.65, 0.95, -25)),
@@ -306,7 +308,7 @@ def d_chair(x, z, f):
 
 
 def d_barstool(x, z, yaw):
-    barstool_m.bar_stool(x, z, yaw); COLL.append((x - .27, z - .27, x + .27, z + .27))
+    barstool_m.bar_stool(x, z, yaw, seat_h=BARSTOOL_SEAT_H); COLL.append((x - .27, z - .27, x + .27, z + .27))
 
 def d_pac(x, z):
     pac_m.portable_ac(x, z); COLL.append((x - .14, z - .225, x + .14, z + .225))

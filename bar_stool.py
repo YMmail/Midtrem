@@ -6,7 +6,7 @@ from OpenGL.GLUT import *
 LIGHT_DIR = (0.577, 0.577, 0.577)
 COLLIDERS = []
 
-def bar_stool(cx, cz, yaw=0.0):
+def bar_stool(cx, cz, yaw=0.0, seat_h=0.625):
     """สตูลบาร์เปลือกพลาสติกขาว + ขาไม้โอ๊ค 4 ขากางออก + ที่พักเท้าเหล็กดำ (แบบ About A Stool)
     ที่นั่งสูง ~65 cm  พนักโค้งอยู่ด้าน +Z  yaw = หมุนรอบแกนตั้ง (องศา)"""
 
@@ -39,7 +39,7 @@ def bar_stool(cx, cz, yaw=0.0):
 
     COLLIDERS.append((cx - 0.27, cz - 0.27, cx + 0.27, cz + 0.27))
     white, oak, blk = (0.93, 0.94, 0.97), (0.80, 0.62, 0.38), (0.05, 0.05, 0.06)
-    rx, rz, y_c = 0.235, 0.205, 0.625
+    rx, rz, y_c = 0.235, 0.205, seat_h
     seg, rings = 56, 12
     ld = math.sqrt(sum(v * v for v in LIGHT_DIR))
     L = tuple(v / ld for v in LIGHT_DIR)
@@ -96,10 +96,10 @@ def bar_stool(cx, cz, yaw=0.0):
     legs = []
     for sx in (-1, 1):
         for sz in (-1, 1):
-            top = (sx * 0.150, 0.612, sz * 0.110)
+            top = (sx * 0.150, seat_h - 0.013, sz * 0.110)
             bot = (sx * 0.255, 0.0, sz * (0.185 if sz < 0 else 0.250))
             _tube(top, bot, 0.020, oak, 14)
-            f = (0.612 - 0.26) / 0.612
+            f = (seat_h - 0.013 - 0.26) / (seat_h - 0.013)
             legs.append(tuple(top[j] + (bot[j] - top[j]) * f for j in range(3)))
 
     # 3. ที่พักเท้าโครงเหล็กดำ
