@@ -5,6 +5,7 @@ import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
+import studio_sign
 
 INCH = 0.0254
 W = 305 * INCH
@@ -204,35 +205,6 @@ def wall_pieces(x0, x1, y0, y1, holes):
     return pieces
 
 
-STROKE_H = 119.05
-
-
-def make_text_tex(text, color=(10, 178, 235), size=110):
-    asp = sum(glutStrokeWidth(GLUT_STROKE_ROMAN, ord(ch)) for ch in text) / STROKE_H
-    return text, asp, tuple(v / 255.0 for v in color)
-
-
-def _logo_decal(logo, cx, cy, z, h):
-    text, asp, col = logo
-    k = h / STROKE_H
-    glDepthMask(GL_FALSE)
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-    glEnable(GL_LINE_SMOOTH)
-    glLineWidth(2.0)
-    glColor3f(*col)
-    glPushMatrix()
-    glTranslatef(cx - h * asp / 2, cy - h * 0.38, z)
-    glScalef(k, k, k)
-    for ch in text:
-        glutStrokeCharacter(GLUT_STROKE_ROMAN, ord(ch))
-    glPopMatrix()
-    glLineWidth(1.0)
-    glDisable(GL_LINE_SMOOTH)
-    glDisable(GL_BLEND)
-    glDepthMask(GL_TRUE)
-
-
 def upload_texture(arr):
     h, w, _ = arr.shape
     tid = glGenTextures(1)
@@ -305,35 +277,6 @@ def tex_front_wall():
     img += rng.normal(0, 0.008, (s, s, 1))
     img[:, :2] *= 0.82
     img[:2, :] *= 0.82
-    return (np.clip(img, 0, 1) * 255).astype(np.uint8)
-
-
-SIGN_FACE = [None]
-
-
-def tex_sign():
-    w, h = 540, 480
-    rng = np.random.default_rng(11)
-    xs = np.linspace(0, 1, w)[None, :]
-    ys = np.linspace(0, 1, h)[:, None]
-    split = 0.445
-    wave = 0.90 - 0.03 * np.cos(2 * np.pi * 0.9 * xs)
-    g = 0.86 - 0.34 * np.exp(-(ys / 0.20) ** 2) - 0.14 * np.clip((xs - 0.45) / 0.55, 0, 1)
-    g = g + 0 * xs
-    top = np.stack([g * 0.99, g, g * 1.01], axis=2)
-    gb = 0.86 - 0.10 * xs + 0 * ys
-    bot = np.stack([gb * 0.97, gb * 0.94, gb * 0.89], axis=2)
-    bot += rng.normal(0, 0.008, (h, w, 1))
-    t = np.clip((ys - wave) / 0.09, 0, 1)
-    gs = 0.95 - 0.50 * t ** 0.8 - 0.12 * xs
-    strip = np.stack([gs, gs, gs * 1.01], axis=2)
-    img = np.where(ys[..., None] < split, top, np.where(ys[..., None] < wave[..., None], bot, strip))
-    img = np.where(np.abs(ys - split)[..., None] < 0.004, 0.50, img)
-    img = np.where(np.abs(ys - wave)[..., None] < 0.0035, 0.55, img)
-    e = 0.012
-    edge = (xs < e) | (xs > 1 - e) | (ys < e) | (ys > 1 - e)
-    img = np.where(edge[..., None], 0.46, img)
-    img = np.flipud(img)
     return (np.clip(img, 0, 1) * 255).astype(np.uint8)
 
 
@@ -508,17 +451,9 @@ def front_shoe_racks():
         x = xb
 
 
-def front_sign(code_tex, name_tex):
-    x0 = DOOR_B + FRAME_HALF + SIGN_GAP
-    x1 = x0 + SIGN_W
-    zs = FZ + SIGN_T
-    zf = zs + 0.0004
-    box(x0, SIGN_Y0, FZ, x1, SIGN_Y1, zs, (0.50, 0.52, 0.55))
-    tquad(SIGN_FACE[0], [(x0, SIGN_Y0, zf), (x1, SIGN_Y0, zf), (x1, SIGN_Y1, zf), (x0, SIGN_Y1, zf)],
-          [(0, 0), (1, 0), (1, 1), (0, 1)])
-    xm = (x0 + x1) / 2
-    _logo_decal(code_tex, xm, SIGN_Y1 - 0.22 * SIGN_H, zf + 0.0006, min(0.046, SIGN_W * 0.78 / code_tex[1]))
-    _logo_decal(name_tex, xm, SIGN_Y1 - 0.70 * SIGN_H, zf + 0.0006, min(0.040, SIGN_W * 0.85 / name_tex[1]))
+def front_sign(sign_tex):
+    x = DOOR_B + FRAME_HALF + SIGN_GAP + studio_sign.SIGN_W / 2
+    studio_sign.room_sign(x, SIGN_Y0, FZ, sign_tex)
 
 
 def front_window_wall():
@@ -545,14 +480,14 @@ def front_window_wall():
         box(xl, CLERE_Y1 - 0.02, ZW - 0.05, xr, CLERE_Y1 + 0.02, ZW, FRAME_DARK)
 
 
-def front_corridor(ter, fwall, sign_code, sign_name):
+def front_corridor(ter, fwall, sign_tex):
     front_shell(ter, fwall)
     front_door()
     front_strip_windows()
     wall_glass()
     front_baseboard()
     front_shoe_racks()
-    front_sign(sign_code, sign_name)
+    front_sign(sign_tex)
     front_window_wall()
     COLLIDERS.append((RACK_X0, FZ, RACK_X0 + sum(RACK_LENS), FZ + RACK_D))
 
@@ -623,9 +558,7 @@ def build_scene():
     tex = (upload_texture(tex_floor()), upload_texture(tex_wall()), upload_texture(tex_ceiling()))
     ter_tex = upload_texture(tex_terrazzo())
     fwall_tex = upload_texture(tex_front_wall())
-    SIGN_FACE[0] = upload_texture(tex_sign())
-    sign_code = make_text_tex("CB 30609", (26, 27, 30))
-    sign_name = make_text_tex("Photo Studio", (250, 250, 252))
+    sign_tex = studio_sign.prepare_sign()
     lst = glGenLists(1)
     glNewList(lst, GL_COMPILE)
     room_shell(tex)
@@ -633,7 +566,7 @@ def build_scene():
     window_wall()
     door_wall()
     east_wall()
-    front_corridor(ter_tex, fwall_tex, sign_code, sign_name)
+    front_corridor(ter_tex, fwall_tex, sign_tex)
     draw_window_glass()
     glEndList()
     return lst

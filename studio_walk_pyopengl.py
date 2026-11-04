@@ -138,6 +138,7 @@ def _imp(name):
         print("[import พัง]", name, "->", type(e).__name__, e)
     return _FB()
 
+_imp("studio_sign")
 shell_m        = _load_shell()          # แปลนห้อง (ผนัง หน้าต่าง ประตู ทางเดิน) จาก studio_room_shell.py
 office_chair_m = _imp("office_chair")
 aircon_m       = _imp("aircon")
@@ -161,7 +162,7 @@ ITEM_NAMES     = ("02_yellow_box", "03_blue_box", "04_white_box", "05_documents"
                   "07_black_bag", "08_orange_cloth_Box", "09_green_cloth_Box", "10_paper_on_shelf")
 items_m        = [_imp(n) for n in ITEM_NAMES]
 fan_m          = _imp("fan")
-sign_m         = _imp("front_sign")
+sign_m         = _imp("studio_sign")            # ป้ายหน้าห้อง (แทน front_sign เดิม)
 shoe_m         = _imp("front_shoe_racks")
 rolls_m        = _imp("studio_paper_rolls")      # ม้วนฉากกระดาษใต้กระดาน (ชุดเดียวแทน paper_roll*, 12.x, 13)
 
@@ -455,12 +456,12 @@ def d_fan():
     keep([(cx + sg * 0.11, FAN_CY + 0.13, D - 0.012), (xc, FAN_CY + 0.13, zf), (xc, 2.605, zf),
           (xc, 2.64, D - 0.018), (xc, 2.65, D - 0.015)], r=0.004, col=(0.05, 0.05, 0.06), seg=6)
 
+SIGN_TX = [None]
+
 def d_sign():
-    sm = sign_m
-    if not hasattr(sm, "front_sign"): return
-    sm.DOOR_B, sm.FZ = DOOR_B, FZW            # ตำแหน่งวางที่ขอบประตู (ขนาดป้ายใช้ตามโมเดล)
-    sm.SIGN_Y1 = STRIP_Y0 - 0.65; sm.SIGN_Y0 = sm.SIGN_Y1 - sm.SIGN_H
-    sm.front_sign()
+    if SIGN_TX[0] is None: return
+    x = shell_m.DOOR_B + shell_m.FRAME_HALF + shell_m.SIGN_GAP + sign_m.SIGN_W / 2     # ชิดกรอบประตูด้านขวา
+    sign_m.room_sign(x, shell_m.SIGN_Y0, FZW, SIGN_TX[0])
 
 def d_shoes():
     if not hasattr(shoe_m, "front_shoe_racks"): return
@@ -485,10 +486,9 @@ def build_scene():
     tex = (S.upload_texture(S.tex_floor()), S.upload_texture(S.tex_wall()), S.upload_texture(S.tex_ceiling()))
     ter, fwall = S.upload_texture(S.tex_terrazzo()), S.upload_texture(S.tex_front_wall())
     try:
-        if hasattr(sign_m, "generate_sign_texture"):
-            sign_m.SIGN_TEX[0] = sign_m.generate_sign_texture()
+        SIGN_TX[0] = sign_m.prepare_sign()           # สร้างเท็กซ์เจอร์ป้ายก่อนเข้า display list
     except Exception as e:
-        print('[ป้าย] สร้างเท็กซ์เจอร์ไม่ได้:', e)
+        print('[ป้าย] สร้างไม่ได้:', e)
     lst = glGenLists(1)
     glNewList(lst, GL_COMPILE)
     S.room_shell(tex); S.ceiling_fixtures(); S.window_wall(); S.door_wall(); S.east_wall()   # แปลนห้อง
